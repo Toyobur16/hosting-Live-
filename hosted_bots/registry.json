@@ -1,0 +1,16 @@
+[
+  {
+    "id": "otpzonejk-bot-h92eu",
+    "name": "@OtpZoneJK_bot",
+    "dirName": "otpzonejk-bot-h92eu",
+    "entryFile": "bot.py",
+    "token": "8814477083:AAH_G8v9gg3YRyVUyYvVRZ65Y_ZIT2nffJM",
+    "created": "2026-09-09T21:51:12.263Z",
+    "status": "stopped",
+    "pid": null,
+    "uptime": "0s",
+    "owner": "user",
+    "autoRestart": true,
+    "lastPing": "2026-09-09T21:54:47.559Z"
+  }
+]

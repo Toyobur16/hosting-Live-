@@ -1,0 +1,8 @@
+python-telegram-bot>=20.0
+httpx>=0.24.0
+httpx[http2]
+h2>=4.0.0
+pyotp>=2.8.0
+requests
+pyTelegramBotAPI
+aiohttp
