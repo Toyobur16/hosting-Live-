@@ -37,6 +37,40 @@ interface BotProcess {
 const runningProcesses = new Map<string, BotProcess>();
 const botLogs = new Map<string, Array<{ id: string; timestamp: string; level: 'info' | 'warn' | 'error'; message: string }>>();
 
+// Robust Python Package Installer
+function runPipInstall(args: string, cwd?: string, timeout = 60000): void {
+  const dir = cwd || process.cwd();
+  try {
+    execSync(`python3 -m pip install --break-system-packages --no-cache-dir ${args}`, { cwd: dir, timeout });
+  } catch {
+    try {
+      execSync(`pip3 install --break-system-packages --no-cache-dir ${args}`, { cwd: dir, timeout });
+    } catch {
+      try {
+        execSync(`apt-get update && apt-get install -y python3-pip python3-venv`, { timeout: 90000 });
+        execSync(`python3 -m pip install --break-system-packages --no-cache-dir ${args}`, { cwd: dir, timeout });
+      } catch (err: any) {
+        throw err;
+      }
+    }
+  }
+}
+
+// Background environment verification ensuring pip and core libraries are ready
+function ensurePythonBotDependencies() {
+  exec('python3 -c "import httpx, telebot, telegram, aiogram, requests"', (err) => {
+    if (err) {
+      console.log('Installing core Python bot dependencies...');
+      exec('python3 -m pip install --break-system-packages --no-cache-dir httpx "httpx[http2]" pyTelegramBotAPI python-telegram-bot aiogram requests aiohttp pillow beautifulsoup4 pydantic pytz schedule', (instErr) => {
+        if (instErr) {
+          exec('apt-get update && apt-get install -y python3-pip python3-venv && python3 -m pip install --break-system-packages --no-cache-dir httpx "httpx[http2]" pyTelegramBotAPI python-telegram-bot aiogram requests aiohttp pillow beautifulsoup4 pydantic pytz schedule');
+        }
+      });
+    }
+  });
+}
+ensurePythonBotDependencies();
+
 function appendLog(botId: string, level: 'info' | 'warn' | 'error', message: string) {
   if (!botLogs.has(botId)) {
     botLogs.set(botId, []);
@@ -97,16 +131,64 @@ function saveSessions(data: Record<string, string>) {
   fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// Auth Middleware (Optional / Token based)
+function generateAuthToken(user: any): string {
+  const payload = {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 // Valid for 30 days (persists across 24h)
+  };
+  return `bt_${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+}
+
+// Auth Middleware (Token based with 30-day session persistence)
 function getAuthUser(req: express.Request): any | null {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.split(' ')[1];
+  if (!token) return null;
+
   const sessions = getSessions();
-  const userId = sessions[token];
-  if (!userId) return null;
   const accounts = getAccounts();
-  return accounts.find((a) => a.id === userId) || null;
+
+  // 1. Direct session lookup
+  if (sessions[token]) {
+    const userId = sessions[token];
+    const user = accounts.find((a) => a.id === userId);
+    if (user) return user;
+  }
+
+  // 2. Structured self-healing token (retains login across container restarts for 30 days)
+  if (token.startsWith('bt_')) {
+    try {
+      const jsonStr = Buffer.from(token.slice(3), 'base64url').toString('utf-8');
+      const payload = JSON.parse(jsonStr);
+      if (payload && payload.userId && payload.expiresAt && payload.expiresAt > Date.now()) {
+        let user = accounts.find(
+          (a) => a.id === payload.userId || (payload.email && a.email?.toLowerCase() === payload.email.toLowerCase())
+        );
+        if (!user) {
+          user = {
+            id: payload.userId,
+            name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User'),
+            email: payload.email || 'user@bot-host.local',
+            role: payload.role || (accounts.length === 0 ? 'admin' : 'user')
+          };
+          accounts.push(user);
+          saveAccounts(accounts);
+        }
+        sessions[token] = user.id;
+        saveSessions(sessions);
+        return user;
+      }
+    } catch {
+      // Invalid payload
+    }
+  }
+
+  return null;
 }
 
 // Bot runner
@@ -122,11 +204,17 @@ function launchBotProcess(bot: any): boolean {
     try {
       const p = runningProcesses.get(bot.id)!.process;
       p.kill('SIGTERM');
+      setTimeout(() => {
+        try { p.kill('SIGKILL'); } catch {}
+      }, 100);
     } catch {
       // Ignore
     }
     runningProcesses.delete(bot.id);
   }
+  try {
+    execSync(`pkill -9 -f "${botDir}" 2>/dev/null || true`);
+  } catch {}
 
   const entry = bot.entryFile || 'bot.py';
   const entryPath = path.join(botDir, entry);
@@ -160,7 +248,7 @@ function launchBotProcess(bot: any): boolean {
   const reqFile = path.join(botDir, 'requirements.txt');
   if (fs.existsSync(reqFile)) {
     try {
-      execSync(`pip3 install --break-system-packages -r "${reqFile}"`, { cwd: botDir, timeout: 60000 });
+      runPipInstall(`-r "${reqFile}"`, botDir, 60000);
     } catch {}
   }
 
@@ -244,12 +332,13 @@ function launchBotProcess(bot: any): boolean {
               telegram: 'python-telegram-bot',
               PIL: 'pillow',
               bs4: 'beautifulsoup4',
-              cv2: 'opencv-python'
+              cv2: 'opencv-python',
+              dotenv: 'python-dotenv'
             };
             const targetPkg = pkgAliases[missingPkg] || missingPkg;
-            appendLog(bot.id, 'info', `Auto-healing: Installing missing library '${targetPkg}' via pip3...`);
+            appendLog(bot.id, 'info', `Auto-healing: Installing missing library '${targetPkg}' via python pip...`);
             try {
-              execSync(`pip3 install --break-system-packages --no-cache-dir "${targetPkg}"`, { cwd: botDir, timeout: 45000 });
+              runPipInstall(`"${targetPkg}"`, botDir, 45000);
               appendLog(bot.id, 'info', `Library '${targetPkg}' installed! Re-launching bot process...`);
               setTimeout(() => {
                 launchBotProcess(bot);
@@ -295,23 +384,48 @@ function launchBotProcess(bot: any): boolean {
 }
 
 function stopBotProcess(botId: string): boolean {
-  if (runningProcesses.has(botId)) {
-    try {
-      const p = runningProcesses.get(botId)!.process;
-      p.kill('SIGTERM');
-      runningProcesses.delete(botId);
-    } catch {
-      // Ignore
-    }
-  }
   const reg = getRegistry();
+  const bot = reg.find((b) => b.id === botId);
+  const botDir = bot ? path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id) : null;
+
+  if (runningProcesses.has(botId)) {
+    const item = runningProcesses.get(botId)!;
+    const p = item.process;
+    const pid = p.pid;
+    try {
+      p.kill('SIGTERM');
+    } catch {}
+
+    if (pid) {
+      try { process.kill(pid, 'SIGKILL'); } catch {}
+      try { process.kill(-pid, 'SIGKILL'); } catch {}
+    }
+    runningProcesses.delete(botId);
+  }
+
+  // Forcefully terminate any remaining python process attached to this bot workspace
+  if (botDir) {
+    try {
+      execSync(`pkill -9 -f "${botDir}" 2>/dev/null || true`);
+    } catch {}
+  }
+
+  // Close Telegram active polling session & drop pending updates if bot token is present
+  if (bot?.token) {
+    try {
+      fetch(`https://api.telegram.org/bot${bot.token}/deleteWebhook?drop_pending_updates=true`).catch(() => {});
+      fetch(`https://api.telegram.org/bot${bot.token}/close`).catch(() => {});
+    } catch {}
+  }
+
   const idx = reg.findIndex((b) => b.id === botId);
   if (idx !== -1) {
     reg[idx].status = 'stopped';
     reg[idx].pid = null;
+    reg[idx].autoRestart = false; // Disable watchdog auto-restart when explicitly stopped
     saveRegistry(reg);
   }
-  appendLog(botId, 'info', 'Bot stopped by user.');
+  appendLog(botId, 'info', 'Bot process forcefully stopped and Telegram session closed.');
   return true;
 }
 
@@ -361,7 +475,7 @@ app.post('/api/auth/register', (req, res) => {
   accounts.push(newUser);
   saveAccounts(accounts);
 
-  const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  const token = generateAuthToken(newUser);
   const sessions = getSessions();
   sessions[token] = userId;
   saveSessions(sessions);
@@ -389,7 +503,7 @@ app.post('/api/auth/login', (req, res) => {
     saveAccounts(accounts);
   }
 
-  const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  const token = generateAuthToken(user);
   const sessions = getSessions();
   sessions[token] = user.id;
   saveSessions(sessions);
@@ -528,18 +642,6 @@ app.post('/api/bots', (req, res) => {
     if (m && m[1]) effectiveToken = m[1];
   }
 
-  // Auto install requirements.txt if present
-  const reqPath = path.join(botDir, 'requirements.txt');
-  if (fs.existsSync(reqPath)) {
-    appendLog(botId, 'info', 'Found requirements.txt, checking dependencies...');
-    try {
-      execSync(`pip3 install --break-system-packages --no-cache-dir -r "${reqPath}"`, { cwd: botDir, timeout: 60000 });
-      appendLog(botId, 'info', 'Dependencies installed successfully.');
-    } catch (err: any) {
-      appendLog(botId, 'warn', `Pip notice: ${err.message}`);
-    }
-  }
-
   const newBot = {
     id: botId,
     name,
@@ -558,6 +660,19 @@ app.post('/api/bots', (req, res) => {
   const reg = getRegistry();
   reg.push(newBot);
   saveRegistry(reg);
+
+  // Background install requirements if present, without blocking API response
+  const reqPath = path.join(botDir, 'requirements.txt');
+  if (fs.existsSync(reqPath)) {
+    appendLog(botId, 'info', 'Found requirements.txt, checking dependencies in background...');
+    exec(`python3 -m pip install --break-system-packages --no-cache-dir -r "${reqPath}" || pip3 install --break-system-packages --no-cache-dir -r "${reqPath}"`, { cwd: botDir }, (err, stdout) => {
+      if (err) {
+        appendLog(botId, 'warn', `Pip notice: ${err.message}`);
+      } else {
+        appendLog(botId, 'info', 'Dependencies installed.');
+      }
+    });
+  }
 
   if (autoStart !== false) {
     launchBotProcess(newBot);
@@ -595,6 +710,8 @@ app.post('/api/bots/:id/start', (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  bot.autoRestart = true;
+  saveRegistry(reg);
   const started = launchBotProcess(bot);
   res.json({ success: started });
 });
@@ -613,6 +730,8 @@ app.post('/api/bots/:id/restart', (req, res) => {
     return res.status(404).json({ error: 'Bot not found' });
   }
 
+  bot.autoRestart = true;
+  saveRegistry(reg);
   stopBotProcess(id);
   setTimeout(() => {
     const started = launchBotProcess(bot);
@@ -744,8 +863,11 @@ app.post('/api/bots/:id/file', (req, res) => {
     fs.writeFileSync(filePath, content, 'utf-8');
     appendLog(id, 'info', `File '${safeFilename}' updated successfully.`);
 
-    if (restart && runningProcesses.has(id)) {
-      launchBotProcess(bot);
+    if (restart) {
+      stopBotProcess(id);
+      setTimeout(() => {
+        launchBotProcess(bot);
+      }, 600);
     }
 
     res.json({ success: true, filename: safeFilename });
@@ -801,8 +923,11 @@ app.post('/api/bots/:id/upload-files', (req, res) => {
   }
 
   appendLog(id, 'info', `Uploaded ${files.length} files.`);
-  if (restart && runningProcesses.has(id)) {
-    launchBotProcess(bot);
+  if (restart) {
+    stopBotProcess(id);
+    setTimeout(() => {
+      launchBotProcess(bot);
+    }, 600);
   }
   res.json({ success: true });
 });
@@ -826,8 +951,11 @@ app.post('/api/bots/:id/upload-zip', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     appendLog(id, 'info', 'Extracted zip archive successfully.');
-    if (restart && runningProcesses.has(id)) {
-      launchBotProcess(bot);
+    if (restart) {
+      stopBotProcess(id);
+      setTimeout(() => {
+        launchBotProcess(bot);
+      }, 600);
     }
     res.json({ success: true });
   });
@@ -858,7 +986,7 @@ app.post('/api/code/syntax-check', (req, res) => {
 
 // 6. Python Pip Package Manager
 app.get('/api/pip/packages', (req, res) => {
-  exec('pip3 list --format=json', (err, stdout) => {
+  exec('python3 -m pip list --format=json || pip3 list --format=json', (err, stdout) => {
     if (err) {
       return res.json({ packages: [] });
     }
@@ -876,7 +1004,7 @@ app.post('/api/pip/install', (req, res) => {
   if (!pkgName) return res.status(400).json({ error: 'Package name is required' });
 
   const safePkg = pkgName.trim().replace(/[^a-zA-Z0-9_\-\.\=\>\<\[\]]/g, '');
-  exec(`pip3 install --no-cache-dir --break-system-packages ${safePkg}`, (err, stdout, stderr) => {
+  exec(`python3 -m pip install --no-cache-dir --break-system-packages ${safePkg} || pip3 install --no-cache-dir --break-system-packages ${safePkg}`, (err, stdout, stderr) => {
     if (err) {
       return res.status(500).json({ error: stderr || err.message });
     }
@@ -885,17 +1013,34 @@ app.post('/api/pip/install', (req, res) => {
 });
 
 // 7. Services & SMS Manager for Bot
-app.get('/api/bots/:id/services', (req, res) => {
-  const { id } = req.params;
+function resolveBotDirectory(botIdQuery?: any): { bot: any; botDir: string } | null {
   const reg = getRegistry();
-  const bot = reg.find((b) => b.id === id);
-  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+  let bot = null;
+  if (botIdQuery) {
+    bot = reg.find((b) => b.id === botIdQuery || b.dirName === botIdQuery);
+  }
+  if (!bot && reg.length > 0) {
+    bot = reg[0];
+  }
+  if (!bot) return null;
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  if (!fs.existsSync(botDir)) {
+    fs.mkdirSync(botDir, { recursive: true });
+  }
+  return { bot, botDir };
+}
 
-  const servicesPath = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, 'custom_services.json');
+// Global & Per-Bot Services endpoints
+app.get(['/api/services', '/api/bots/:id/services'], (req, res) => {
+  const botId = req.params.id || req.query.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.json({ services: [] });
+
+  const servicesPath = path.join(resolved.botDir, 'custom_services.json');
   if (fs.existsSync(servicesPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(servicesPath, 'utf-8'));
-      return res.json({ services: data });
+      return res.json({ services: Array.isArray(data) ? data : [] });
     } catch {
       return res.json({ services: [] });
     }
@@ -903,17 +1048,133 @@ app.get('/api/bots/:id/services', (req, res) => {
   res.json({ services: [] });
 });
 
-app.post('/api/bots/:id/services', (req, res) => {
-  const { id } = req.params;
-  const { services } = req.body;
-  const reg = getRegistry();
-  const bot = reg.find((b) => b.id === id);
-  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+app.post(['/api/services', '/api/bots/:id/services'], (req, res) => {
+  const botId = req.params.id || req.query.botId || req.body.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found' });
 
-  const servicesPath = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, 'custom_services.json');
+  const { services } = req.body;
+  const servicesPath = path.join(resolved.botDir, 'custom_services.json');
   try {
-    fs.writeFileSync(servicesPath, JSON.stringify(services, null, 2), 'utf-8');
-    res.json({ success: true });
+    fs.writeFileSync(servicesPath, JSON.stringify(services || [], null, 2), 'utf-8');
+    appendLog(resolved.bot.id, 'info', `Updated custom services list (${(services || []).length} items).`);
+    res.json({ success: true, services: services || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(['/api/services/clear', '/api/bots/:id/services/clear'], (req, res) => {
+  const botId = req.params.id || req.query.botId || req.body.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+
+  const servicesPath = path.join(resolved.botDir, 'custom_services.json');
+  try {
+    fs.writeFileSync(servicesPath, JSON.stringify([], null, 2), 'utf-8');
+    appendLog(resolved.bot.id, 'info', 'All services cleared from custom_services.json.');
+    res.json({ success: true, services: [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(['/api/services/reset-default', '/api/bots/:id/services/reset-default'], (req, res) => {
+  const botId = req.params.id || req.query.botId || req.body.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+
+  const defaultServices = [
+    { sid: 'TELEGRAM', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'WHATSAPP', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'FACEBOOK', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'TIKTOK', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'IMO', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'GOOGLE / GMAIL', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'TWITTER / X', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'INSTAGRAM', ranges: [{ range: 'GLOBAL', country: 'International' }] },
+    { sid: 'SNAPCHAT', ranges: [{ range: 'GLOBAL', country: 'International' }] }
+  ];
+
+  const servicesPath = path.join(resolved.botDir, 'custom_services.json');
+  try {
+    fs.writeFileSync(servicesPath, JSON.stringify(defaultServices, null, 2), 'utf-8');
+    appendLog(resolved.bot.id, 'info', 'Default services restored in custom_services.json.');
+    res.json({ success: true, services: defaultServices });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// SMS Gateway Config endpoints
+app.get(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
+  const botId = req.params.id || req.query.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.json({ baseUrl: 'https://minosms.com', apiKey: '', token: '' });
+
+  const configPath = path.join(resolved.botDir, 'sms_config.json');
+  let config: any = { baseUrl: 'https://minosms.com', apiKey: '', token: resolved.bot.token || '' };
+  if (fs.existsSync(configPath)) {
+    try {
+      config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf-8')) };
+    } catch {}
+  } else {
+    // Check .env
+    const envPath = path.join(resolved.botDir, '.env');
+    if (fs.existsSync(envPath)) {
+      const text = fs.readFileSync(envPath, 'utf-8');
+      const baseMatch = text.match(/(?:BASE_URL|API_URL|SMS_API_URL)\s*=\s*["']?([^"'\r\n]+)["']?/i);
+      const keyMatch = text.match(/(?:API_KEY|SMS_API_KEY|MINO_API_KEY)\s*=\s*["']?([^"'\r\n]+)["']?/i);
+      if (baseMatch) config.baseUrl = baseMatch[1];
+      if (keyMatch) config.apiKey = keyMatch[1];
+    }
+  }
+  res.json(config);
+});
+
+app.post(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
+  const botId = req.params.id || req.body.botId;
+  const resolved = resolveBotDirectory(botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+
+  const { baseUrl, apiKey, token } = req.body;
+  const config = {
+    baseUrl: (baseUrl || 'https://minosms.com').trim(),
+    apiKey: (apiKey || '').trim(),
+    token: (token || resolved.bot.token || '').trim()
+  };
+
+  const configPath = path.join(resolved.botDir, 'sms_config.json');
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+    // Also sync to bot workspace .env
+    const envPath = path.join(resolved.botDir, '.env');
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+    if (config.baseUrl) {
+      if (envContent.match(/BASE_URL\s*=/)) {
+        envContent = envContent.replace(/BASE_URL\s*=.*/, `BASE_URL=${config.baseUrl}`);
+      } else {
+        envContent += `\nBASE_URL=${config.baseUrl}\n`;
+      }
+    }
+    if (config.apiKey) {
+      if (envContent.match(/API_KEY\s*=/)) {
+        envContent = envContent.replace(/API_KEY\s*=.*/, `API_KEY=${config.apiKey}`);
+      } else {
+        envContent += `\nAPI_KEY=${config.apiKey}\n`;
+      }
+    }
+    if (config.token) {
+      if (envContent.match(/BOT_TOKEN\s*=/)) {
+        envContent = envContent.replace(/BOT_TOKEN\s*=.*/, `BOT_TOKEN=${config.token}`);
+      } else {
+        envContent += `\nBOT_TOKEN=${config.token}\nTOKEN=${config.token}\n`;
+      }
+    }
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
+    appendLog(resolved.bot.id, 'info', 'SMS Gateway configuration updated.');
+    res.json({ success: true, config });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -15,7 +15,15 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'bots' | 'terminal'>('bots');
-  const [lang, setLang] = useState<'bn' | 'en'>('bn');
+  const [lang, setLang] = useState<'bn' | 'en'>(() => {
+    const saved = localStorage.getItem('bot_lang');
+    return saved === 'en' ? 'en' : 'bn';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('bot_lang', lang);
+  }, [lang]);
+
   const [showNewBotModal, setShowNewBotModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTokenCheckModal, setShowTokenCheckModal] = useState(false);
@@ -42,8 +50,15 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Authentication State
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  // Authentication State with 24h+ local persistence
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('bot_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
@@ -57,23 +72,24 @@ export default function App() {
 
   const checkAuth = async () => {
     const token = localStorage.getItem('bot_auth_token');
-    if (!token) {
-      // User can browse existing bots or log in
-      return;
-    }
+    if (!token) return;
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        localStorage.removeItem('bot_auth_token');
+        localStorage.removeItem('bot_auth_user');
+        setCurrentUser(null);
+        return;
+      }
       const data = await res.json();
       if ((data.authenticated || data.success) && data.user) {
         setCurrentUser(data.user);
-      } else {
-        localStorage.removeItem('bot_auth_token');
-        setCurrentUser(null);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
       }
     } catch {
-      // Retain offline
+      // Offline / network glitch: retain user session from localStorage
     }
   };
 
@@ -129,13 +145,18 @@ export default function App() {
 
   const handleStartBot = async (botId: string) => {
     setLoading(true);
+    setBots((prev) =>
+      prev.map((b) => (b.id === botId ? { ...b, status: 'running' } : b))
+    );
     try {
       const res = await authFetch(`/api/bots/${botId}/start`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        fetchBots();
-        fetchLogs(botId);
+        setToastMessage(lang === 'bn' ? 'বট চালু করা হয়েছে।' : 'Bot started successfully.');
+        setTimeout(() => setToastMessage(null), 3000);
       }
+      await fetchBots();
+      await fetchLogs(botId);
     } catch {
       // Network retry
     } finally {
@@ -145,13 +166,18 @@ export default function App() {
 
   const handleStopBot = async (botId: string) => {
     setLoading(true);
+    setBots((prev) =>
+      prev.map((b) => (b.id === botId ? { ...b, status: 'stopped', pid: null } : b))
+    );
     try {
       const res = await authFetch(`/api/bots/${botId}/stop`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        fetchBots();
-        fetchLogs(botId);
+        setToastMessage(lang === 'bn' ? 'বট সফলভাবে বন্ধ করা হয়েছে।' : 'Bot stopped successfully.');
+        setTimeout(() => setToastMessage(null), 3000);
       }
+      await fetchBots();
+      await fetchLogs(botId);
     } catch {
       // Network retry
     } finally {
@@ -165,8 +191,10 @@ export default function App() {
       const res = await authFetch(`/api/bots/${botId}/restart`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        fetchBots();
-        fetchLogs(botId);
+        setToastMessage(lang === 'bn' ? 'বট রিস্টার্ট করা হয়েছে।' : 'Bot restarted successfully.');
+        setTimeout(() => setToastMessage(null), 3000);
+        await fetchBots();
+        await fetchLogs(botId);
       }
     } catch {
       // Network retry
@@ -207,6 +235,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('bot_auth_token');
+    localStorage.removeItem('bot_auth_user');
     setCurrentUser(null);
   };
 

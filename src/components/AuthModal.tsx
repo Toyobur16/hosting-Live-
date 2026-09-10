@@ -89,16 +89,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(data.error || (lang === 'bn' ? 'রেজিস্ট্রেশন ব্যর্থ হয়েছে' : 'Registration failed'));
         }
 
-        // Switch to Login screen immediately with prefilled email
-        setMode('login');
-        setEmail(cleanEmail);
-        setPassword('');
-        setConfirmPassword('');
-        setSuccessMessage(
-          lang === 'bn'
-            ? 'অ্যাকাউন্ট তৈরি সফল হয়েছে! পাসওয়ার্ড দিয়ে লগইন করুন।'
-            : 'Registration successful! Please enter your password to sign in.'
-        );
+        // Auto-login immediately upon registration so user doesn't have to fill forms again
+        localStorage.setItem('bot_auth_token', data.token);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        onSuccess(data.user, data.token);
+        if (onClose) onClose();
       } else if (mode === 'login') {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
@@ -110,6 +105,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(data.error || (lang === 'bn' ? 'লগইন ব্যর্থ হয়েছে' : 'Login failed'));
         }
         localStorage.setItem('bot_auth_token', data.token);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
         onSuccess(data.user, data.token);
         if (onClose) onClose();
       } else if (mode === 'reset') {
@@ -123,6 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(data.error || (lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে' : 'Password reset failed'));
         }
         localStorage.setItem('bot_auth_token', data.token);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
         onSuccess(data.user, data.token);
         if (onClose) onClose();
       }

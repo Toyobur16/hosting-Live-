@@ -13,7 +13,15 @@
   
   html {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color-scheme: dark;
+    background-color: #0a0e1a;
+    color: #f3f4f6;
+  }
+
+  html:not(.dark) {
     color-scheme: light;
+    background-color: #f8fafc;
+    color: #0f172a;
   }
 
   html.dark {
