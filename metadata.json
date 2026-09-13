@@ -1,6 +1,6 @@
 {
   "name": "Bot-Host",
-  "description": "Free 24/7 unlimited cloud hosting platform for Telegram bots and Python scripts with user registration, authentication, isolated bot workspaces, file deletion, live console, and auto-restart watchdog.",
+  "description": "24/7 cloud hosting platform for Telegram bots and Python scripts with hosting plans (1 month to 1 year), Binance wallet and deposit system, user authentication, isolated bot workspaces, live console, and private admin management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

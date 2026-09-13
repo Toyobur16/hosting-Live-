@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle2, Shield, X, Bot, Terminal, Plus, Sparkles, ShieldCheck } from 'lucide-react';
-import { Header } from './components/Header';
+import { CheckCircle2, X, Bell } from 'lucide-react';
+import { AppStoreHeader } from './components/AppStoreHeader';
+import { SidebarDrawer } from './components/SidebarDrawer';
+import { BottomNavBar } from './components/BottomNavBar';
+import { StoreHomePage } from './components/StoreHomePage';
+import { MarketplacePage } from './components/MarketplacePage';
+import { StoreWalletPage } from './components/StoreWalletPage';
+import { WishlistPage } from './components/WishlistPage';
+import { SupportCenterPage } from './components/SupportCenterPage';
+import { ProfilePage } from './components/ProfilePage';
+import { PlansPage } from './components/PlansPage';
 import { BotList } from './components/BotList';
 import { LiveConsole } from './components/LiveConsole';
 import { NewBotModal } from './components/NewBotModal';
@@ -8,16 +17,19 @@ import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { TokenCheckModal } from './components/TokenCheckModal';
 import { SafeUploadModal } from './components/SafeUploadModal';
-import { PlansModal } from './components/PlansModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { HostedBot, LogEntry, AuthUser } from './types';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'home' | 'market' | 'wallet' | 'wishlist' | 'support' | 'profile' | 'plans' | 'bots' | 'terminal'>('home');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [bots, setBots] = useState<HostedBot[]>([]);
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'bots' | 'terminal'>('bots');
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+
   const [lang, setLang] = useState<'bn' | 'en'>(() => {
     const saved = localStorage.getItem('bot_lang');
     return saved === 'en' ? 'en' : 'bn';
@@ -32,7 +44,6 @@ export default function App() {
   const [showTokenCheckModal, setShowTokenCheckModal] = useState(false);
   const [showSafeUploadModal, setShowSafeUploadModal] = useState(false);
   const [safeUploadBot, setSafeUploadBot] = useState<HostedBot | null>(null);
-  const [showPlansModal, setShowPlansModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
   const [tokenForDeploy, setTokenForDeploy] = useState<{ token: string; botName?: string } | null>(null);
@@ -58,7 +69,7 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Authentication State with 24h+ local persistence
+  // Authentication State
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const saved = localStorage.getItem('bot_auth_user');
@@ -96,9 +107,50 @@ export default function App() {
         setCurrentUser(data.user);
         localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
       }
-    } catch {
-      // Offline / network glitch: retain user session from localStorage
+    } catch {}
+  };
+
+  const fetchWishlist = async () => {
+    const token = localStorage.getItem('bot_auth_token');
+    if (!token) return;
+    try {
+      const res = await fetch('/api/wishlist', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWishlistIds(data.itemIds || []);
+      }
+    } catch {}
+  };
+
+  const handleToggleWishlist = async (itemId: string) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      setToastMessage(lang === 'bn' ? 'উইশলিস্টে যুক্ত করতে অনুগ্রহ করে লগইন করুন।' : 'Please log in to save to wishlist.');
+      return;
     }
+    try {
+      const token = localStorage.getItem('bot_auth_token');
+      const res = await fetch('/api/wishlist/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWishlistIds(data.itemIds || []);
+        setToastMessage(
+          data.inWishlist
+            ? (lang === 'bn' ? 'উইশলিস্টে যুক্ত করা হয়েছে ❤️' : 'Added to wishlist ❤️')
+            : (lang === 'bn' ? 'উইশলিস্ট থেকে সরানো হয়েছে' : 'Removed from wishlist')
+        );
+        setTimeout(() => setToastMessage(null), 2500);
+      }
+    } catch {}
   };
 
   const fetchAdminOverview = async () => {
@@ -120,32 +172,66 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Admin URL Detection (?admin=true or /admin)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const isAdminUrl =
-      params.get('admin') === 'true' ||
-      window.location.pathname.startsWith('/admin') ||
-      window.location.hash === '#admin';
+  const isAdmin = Boolean(
+    currentUser && (
+      currentUser.role === 'admin' ||
+      currentUser.email?.toLowerCase().trim() === 'toyoburrahman9090@gmail.com' ||
+      currentUser.email?.toLowerCase().trim() === 'mdtayburrahman1111@gmail.com' ||
+      currentUser.email?.toLowerCase().trim() === 'toyobur@telegram.bot'
+    )
+  );
 
-    if (isAdminUrl) {
-      if (
-        currentUser &&
-        (currentUser.role === 'admin' ||
-          currentUser.email?.toLowerCase() === 'mdtayburrahman1111@gmail.com' ||
-          currentUser.email?.toLowerCase() === 'toyobur@telegram.bot')
-      ) {
-        setShowAdminModal(true);
-      } else if (!currentUser) {
-        setShowAuthModal(true);
-        setToastMessage(
-          lang === 'bn'
-            ? 'এডমিন প্যানেল এক্সেস করতে এডমিন একাউন্ট mdtayburrahman1111@gmail.com দিয়ে লগইন করুন।'
-            : 'Please log in with admin account to access admin panel.'
-        );
+  const hasActivePlan = Boolean(
+    currentUser && (
+      isAdmin ||
+      (currentUser.plan && currentUser.plan !== 'free' && currentUser.plan !== 'none' && currentUser.plan !== 'expired' && (!currentUser.planExpiresAt || currentUser.planExpiresAt > Date.now()))
+    )
+  );
+
+  // Private Admin URL Detection (?admin=true, /admin, #admin)
+  useEffect(() => {
+    const checkAdminRoute = () => {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.toLowerCase();
+      const pathname = window.location.pathname.toLowerCase();
+
+      const isAdminUrl =
+        params.get('admin') === 'true' ||
+        params.get('admin') === 'portal' ||
+        params.get('portal') === 'admin' ||
+        pathname === '/admin' ||
+        pathname.startsWith('/admin/') ||
+        hash === '#admin' ||
+        hash === '#admin-portal';
+
+      if (isAdminUrl) {
+        if (isAdmin) {
+          setShowAdminModal(true);
+        } else if (!currentUser) {
+          setShowAuthModal(true);
+          setToastMessage(
+            lang === 'bn'
+              ? 'গোপন এডমিন প্যানেল ওপেন করতে আপনার অনুমোদিত এডমিন অ্যাকাউন্ট দিয়ে লগইন করুন।'
+              : 'Please log in with your authorized admin account to access the private admin portal.'
+          );
+        } else {
+          setToastMessage(
+            lang === 'bn'
+              ? 'অ্যাক্সেস ডিনাইড: এই অ্যাকাউন্টটির এডমিন পারমিশন নেই।'
+              : 'Access Denied: Your account does not have admin permissions.'
+          );
+        }
       }
-    }
-  }, [currentUser, lang]);
+    };
+
+    checkAdminRoute();
+    window.addEventListener('hashchange', checkAdminRoute);
+    window.addEventListener('popstate', checkAdminRoute);
+    return () => {
+      window.removeEventListener('hashchange', checkAdminRoute);
+      window.removeEventListener('popstate', checkAdminRoute);
+    };
+  }, [currentUser, isAdmin, lang]);
 
   const fetchBots = async () => {
     try {
@@ -161,9 +247,7 @@ export default function App() {
       } else {
         setBots([]);
       }
-    } catch {
-      // Ignore
-    }
+    } catch {}
   };
 
   const fetchLogs = async (botId: string | null) => {
@@ -174,9 +258,7 @@ export default function App() {
       if (data.logs) {
         setLogs(data.logs);
       }
-    } catch {
-      // Ignore
-    }
+    } catch {}
   };
 
   useEffect(() => {
@@ -185,6 +267,9 @@ export default function App() {
 
   useEffect(() => {
     fetchBots();
+    if (currentUser) {
+      fetchWishlist();
+    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -203,17 +288,10 @@ export default function App() {
       prev.map((b) => (b.id === botId ? { ...b, status: 'running' } : b))
     );
     try {
-      const res = await authFetch(`/api/bots/${botId}/start`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setToastMessage(lang === 'bn' ? 'বট চালু করা হয়েছে।' : 'Bot started successfully.');
-        setTimeout(() => setToastMessage(null), 3000);
-      }
+      await authFetch(`/api/bots/${botId}/start`, { method: 'POST' });
       await fetchBots();
-      await fetchLogs(botId);
-    } catch {
-      // Network retry
-    } finally {
+      fetchLogs(botId);
+    } catch {} finally {
       setLoading(false);
     }
   };
@@ -221,60 +299,51 @@ export default function App() {
   const handleStopBot = async (botId: string) => {
     setLoading(true);
     setBots((prev) =>
-      prev.map((b) => (b.id === botId ? { ...b, status: 'stopped', pid: null } : b))
+      prev.map((b) => (b.id === botId ? { ...b, status: 'stopped' } : b))
     );
     try {
-      const res = await authFetch(`/api/bots/${botId}/stop`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setToastMessage(lang === 'bn' ? 'বট সফলভাবে বন্ধ করা হয়েছে।' : 'Bot stopped successfully.');
-        setTimeout(() => setToastMessage(null), 3000);
-      }
+      await authFetch(`/api/bots/${botId}/stop`, { method: 'POST' });
       await fetchBots();
-      await fetchLogs(botId);
-    } catch {
-      // Network retry
-    } finally {
+      fetchLogs(botId);
+    } catch {} finally {
       setLoading(false);
     }
   };
 
   const handleRestartBot = async (botId: string) => {
     setLoading(true);
+    setBots((prev) =>
+      prev.map((b) => (b.id === botId ? { ...b, status: 'starting' } : b))
+    );
     try {
-      const res = await authFetch(`/api/bots/${botId}/restart`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setToastMessage(lang === 'bn' ? 'বট রিস্টার্ট করা হয়েছে।' : 'Bot restarted successfully.');
-        setTimeout(() => setToastMessage(null), 3000);
-        await fetchBots();
-        await fetchLogs(botId);
-      }
-    } catch {
-      // Network retry
-    } finally {
+      await authFetch(`/api/bots/${botId}/restart`, { method: 'POST' });
+      await fetchBots();
+      fetchLogs(botId);
+    } catch {} finally {
       setLoading(false);
     }
   };
 
   const handleDeleteBot = async (botId: string) => {
-    setLoading(true);
+    const bot = bots.find((b) => b.id === botId);
+    if (!bot) return;
+    const confirmMsg =
+      lang === 'bn'
+        ? `আপনি কি নিশ্চিতভাবে '${bot.name}' বটটি মুছে ফেলতে চান?`
+        : `Are you sure you want to delete '${bot.name}'?`;
+    if (!window.confirm(confirmMsg)) return;
+
     try {
-      const res = await authFetch(`/api/bots/${botId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        if (selectedBotId === botId) {
-          const remaining = bots.filter((b) => b.id !== botId);
-          setSelectedBotId(remaining.length > 0 ? remaining[0].id : null);
-          setLogs([]);
-        }
-        fetchBots();
+      await authFetch(`/api/bots/${botId}`, { method: 'DELETE' });
+      await fetchBots();
+      if (selectedBotId === botId) {
+        setSelectedBotId(null);
+        setLogs([]);
       }
-    } catch {
-      // Network retry
-    } finally {
-      setLoading(false);
-    }
+      setToastMessage(
+        lang === 'bn' ? `'${bot.name}' মুছে ফেলা হয়েছে` : `'${bot.name}' deleted`
+      );
+    } catch {}
   };
 
   const handleClearLogs = async () => {
@@ -282,165 +351,197 @@ export default function App() {
     try {
       await authFetch(`/api/bots/${selectedBotId}/logs`, { method: 'DELETE' });
       setLogs([]);
-    } catch {
-      // Ignore
-    }
+    } catch {}
   };
 
   const handleLogout = () => {
     localStorage.removeItem('bot_auth_token');
     localStorage.removeItem('bot_auth_user');
     setCurrentUser(null);
+    setToastMessage(lang === 'bn' ? 'সফলভাবে লগআউট করা হয়েছে' : 'Logged out successfully');
   };
 
   const selectedBot = bots.find((b) => b.id === selectedBotId);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0a0e1a] text-[#1e293b] dark:text-[#f3f4f6] flex flex-col selection:bg-[#0088cc] selection:text-white transition-colors">
-      <Header
-        bots={bots}
-        selectedBotId={selectedBotId}
-        onSelectBot={(id) => setSelectedBotId(id)}
-        onOpenNewBotModal={() => {
-          setTokenForDeploy(null);
-          setShowNewBotModal(true);
-        }}
-        onOpenSettingsModal={(tab = 'overview') => {
-          setSettingsInitialTab(tab);
-          setShowSettingsModal(true);
-        }}
-        onOpenTokenChecker={() => setShowTokenCheckModal(true)}
-        onOpenPlansModal={() => setShowPlansModal(true)}
-        onOpenAdminModal={() => setShowAdminModal(true)}
-        pendingRequestsCount={pendingRequestsCount}
-        lang={lang}
-        setLang={setLang}
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col selection:bg-[#00d293] selection:text-slate-950 pb-20 sm:pb-8">
+      {/* Top App Store Header */}
+      <AppStoreHeader
         user={currentUser}
-        onLogout={handleLogout}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab as any)}
+        onOpenSidebar={() => setIsSidebarOpen(true)}
         onOpenAuthModal={() => setShowAuthModal(true)}
+        onOpenNotifications={() => setShowNotificationsModal(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        pendingCount={pendingRequestsCount}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+      {/* Slide-out Navigation Drawer */}
+      <SidebarDrawer
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab as any)}
+        user={currentUser}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+        onOpenAdminModal={() => setShowAdminModal(true)}
+        onLogout={handleLogout}
+        isAdmin={isAdmin}
+        pendingRequestsCount={pendingRequestsCount}
+      />
+
+      {/* Main Page Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
         {toastMessage && (
-          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 rounded-2xl text-xs flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="mb-4 p-3.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 rounded-2xl text-xs flex items-center justify-between shadow-lg animate-in fade-in">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span className="font-semibold">{toastMessage}</span>
             </div>
             <button
               onClick={() => setToastMessage(null)}
-              className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-white p-1 cursor-pointer"
+              className="text-emerald-400 hover:text-white p-1 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
-        {/* Top View Switcher Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#111827] border border-[#e2e8f0] dark:border-[#1f293d] p-2.5 rounded-2xl shadow-xs transition-colors">
-          <div className="flex items-center gap-1.5 bg-[#f8fafc] dark:bg-[#0f172a] p-1 rounded-xl border border-[#e2e8f0] dark:border-[#1f293d]">
-            <button
-              onClick={() => setActiveTab('bots')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'bots'
-                  ? 'bg-[#0088cc] text-white shadow-xs'
-                  : 'text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span>{lang === 'bn' ? 'হোস্টেড বটস' : 'Hosted Bots'} ({bots.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('terminal')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'terminal'
-                  ? 'bg-[#0088cc] text-white shadow-xs'
-                  : 'text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white'
-              }`}
-            >
-              <Terminal className="w-3.5 h-3.5" />
-              <span>{lang === 'bn' ? 'লাইভ টার্মিনাল ও লগ' : 'Live Terminal & Logs'}</span>
-              {selectedBot?.status === 'running' && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              )}
-            </button>
-          </div>
+        {/* 1. Store Home Page */}
+        {activeTab === 'home' && (
+          <StoreHomePage
+            user={currentUser}
+            onNavigateToWallet={() => setActiveTab('wallet')}
+            onNavigateToMarket={() => setActiveTab('market')}
+            onNavigateToPlans={() => setActiveTab('plans')}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onOpenAdminModal={() => setShowAdminModal(true)}
+            onItemPurchased={() => checkAuth()}
+            wishlistIds={wishlistIds}
+            onToggleWishlist={handleToggleWishlist}
+          />
+        )}
 
-          <div className="flex items-center gap-2">
-            {activeTab === 'terminal' && bots.length > 1 && (
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-[#64748b] dark:text-[#94a3b8] font-semibold hidden sm:inline">
-                  {lang === 'bn' ? 'বট নির্বাচন:' : 'Select Bot:'}
-                </span>
-                <select
-                  value={selectedBotId || ''}
-                  onChange={(e) => {
-                    setSelectedBotId(e.target.value);
-                    fetchLogs(e.target.value);
-                  }}
-                  className="bg-[#f8fafc] dark:bg-[#1e293b] border border-[#cbd5e1] dark:border-[#334155] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#1e293b] dark:text-white cursor-pointer"
-                >
-                  {bots.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.status === 'running' ? 'LIVE' : 'STOPPED'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <button
-              id="toolbar-token-check-btn"
-              onClick={() => setShowTokenCheckModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 text-[#0088cc] dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all hover:scale-[1.01]"
-              title={lang === 'bn' ? 'টেলিগ্রাম বট টোকেন সক্রিয় আছে কিনা পরীক্ষা করুন' : 'Verify if Telegram Bot Token is valid & active'}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-[#0088cc] dark:text-sky-300" />
-              <span>{lang === 'bn' ? 'টোকেন চেক' : 'Check Token'}</span>
-            </button>
-            <button
-              id="toolbar-deploy-bot-btn"
-              onClick={() => {
-                setTokenForDeploy(null);
-                setShowNewBotModal(true);
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all hover:scale-[1.01]"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{lang === 'bn' ? '+ নতুন বট ডিপ্লয়' : '+ Deploy Bot'}</span>
-            </button>
-          </div>
-        </div>
+        {/* 2. Marketplace Page */}
+        {activeTab === 'market' && (
+          <MarketplacePage
+            user={currentUser}
+            onNavigateToWallet={() => setActiveTab('wallet')}
+            onNavigateToPlans={() => setActiveTab('plans')}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            wishlistIds={wishlistIds}
+            onToggleWishlist={handleToggleWishlist}
+          />
+        )}
 
-        {activeTab === 'bots' && (
-          <BotList
-            bots={bots}
-            selectedBotId={selectedBotId}
-            onSelectBot={(id) => {
-              setSelectedBotId(id);
-              setActiveTab('terminal');
+        {/* 3. Wallet & Deposit Page */}
+        {activeTab === 'wallet' && (
+          <StoreWalletPage
+            user={currentUser}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onNavigateToPlans={() => setActiveTab('plans')}
+            onUserUpdated={(u) => {
+              setCurrentUser(u);
+              checkAuth();
             }}
-            onStartBot={handleStartBot}
-            onStopBot={handleStopBot}
-            onRestartBot={handleRestartBot}
-            onDeleteBot={handleDeleteBot}
-            onOpenNewBotModal={() => {
-              setShowNewBotModal(true);
-            }}
-            onOpenFileEditor={(botId) => {
-              setSelectedBotId(botId);
-              setSettingsInitialTab('files');
-              setShowSettingsModal(true);
-            }}
-            onOpenSafeUpload={(bot) => {
-              setSafeUploadBot(bot);
-              setShowSafeUploadModal(true);
+          />
+        )}
+
+        {/* 4. Wishlist Page */}
+        {activeTab === 'wishlist' && (
+          <WishlistPage
+            user={currentUser}
+            wishlistIds={wishlistIds}
+            onToggleWishlist={handleToggleWishlist}
+            onNavigateToMarket={() => setActiveTab('market')}
+            onNavigateToWallet={() => setActiveTab('wallet')}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+          />
+        )}
+
+        {/* 5. Support Center Page */}
+        {activeTab === 'support' && (
+          <SupportCenterPage
+            user={currentUser}
+            onBack={() => setActiveTab('home')}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+          />
+        )}
+
+        {/* 6. Profile Page */}
+        {activeTab === 'profile' && (
+          <ProfilePage
+            user={currentUser}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onNavigateToWallet={() => setActiveTab('wallet')}
+            onNavigateToPlans={() => setActiveTab('plans')}
+            onNavigateToBots={() => setActiveTab('bots')}
+            onLogout={handleLogout}
+            isAdmin={isAdmin}
+            onOpenAdminModal={() => setShowAdminModal(true)}
+          />
+        )}
+
+        {/* 7. Hosting Plans Page */}
+        {activeTab === 'plans' && (
+          <PlansPage
+            user={currentUser}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onNavigateToWallet={() => setActiveTab('wallet')}
+            onPlanActivated={(updatedUser) => {
+              setCurrentUser(updatedUser);
+              fetchBots();
+              setToastMessage(
+                lang === 'bn'
+                  ? '🎉 হোস্টিং প্লান সফলভাবে অ্যাক্টিভ হয়েছে! এখন আপনি নতুন বট ডিপ্লয় করতে পারবেন।'
+                  : '🎉 Hosting plan activated! You can now deploy new bots.'
+              );
             }}
             lang={lang}
           />
         )}
 
+        {/* 8. Bot List / Manager */}
+        {activeTab === 'bots' && (
+          <div className="space-y-4">
+            <BotList
+              bots={bots}
+              selectedBotId={selectedBotId}
+              onSelectBot={(id) => {
+                setSelectedBotId(id);
+                setActiveTab('terminal');
+              }}
+              onStartBot={handleStartBot}
+              onStopBot={handleStopBot}
+              onRestartBot={handleRestartBot}
+              onDeleteBot={handleDeleteBot}
+              onOpenNewBotModal={() => {
+                if (!hasActivePlan) {
+                  setActiveTab('plans');
+                  setToastMessage('বট ডিপ্লয় করতে হলে প্রথমে যেকোনো একটি হোস্টিং প্লান কিনুন।');
+                  return;
+                }
+                setShowNewBotModal(true);
+              }}
+              onOpenFileEditor={(botId) => {
+                setSelectedBotId(botId);
+                setSettingsInitialTab('files');
+                setShowSettingsModal(true);
+              }}
+              onOpenSafeUpload={(bot) => {
+                setSafeUploadBot(bot);
+                setShowSafeUploadModal(true);
+              }}
+              hasActivePlan={hasActivePlan}
+              onOpenPlans={() => setActiveTab('plans')}
+              lang={lang}
+            />
+          </div>
+        )}
+
+        {/* 9. Live Console Terminal */}
         {activeTab === 'terminal' && (
           <LiveConsole
             logs={logs}
@@ -456,6 +557,15 @@ export default function App() {
         )}
       </main>
 
+      {/* Bottom Navigation Bar */}
+      <BottomNavBar
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab as any)}
+        unreadWishlist={wishlistIds.length}
+        userBalance={currentUser?.balanceUsd || 0}
+      />
+
+      {/* Modals */}
       <AuthModal
         isOpen={showAuthModal}
         canDismiss={true}
@@ -535,28 +645,11 @@ export default function App() {
             fetchBots();
             setToastMessage(
               lang === 'bn'
-                ? `'${safeUploadBot.name}' এর ফাইল সফলভাবে আপডেট হয়েছে এবং পূর্বের ব্যালেন্স অক্ষত আছে!`
+                ? `'${safeUploadBot.name}' এর ফাইল সফলভাবে আপডেট হয়েছে এবং ব্যালেন্স অক্ষত আছে!`
                 : `'${safeUploadBot.name}' files safely updated and balances preserved!`
             );
           }}
           lang={lang}
-        />
-      )}
-
-      {showPlansModal && (
-        <PlansModal
-          isOpen={showPlansModal}
-          onClose={() => setShowPlansModal(false)}
-          user={currentUser}
-          onOpenAuthModal={() => {
-            setShowPlansModal(false);
-            setShowAuthModal(true);
-          }}
-          lang={lang}
-          onUserUpdated={(updated) => {
-            setCurrentUser(updated);
-            checkAuth();
-          }}
         />
       )}
 
@@ -570,13 +663,63 @@ export default function App() {
         />
       )}
 
-      <footer className="px-8 py-4 bg-white dark:bg-[#111827] border-t border-[#e2e8f0] dark:border-[#1f293d] text-[#94a3b8] text-xs flex flex-wrap items-center justify-between gap-2 mt-auto transition-colors">
-        <span>&copy; Bot-Host — Free Unlimited Telegram Bot Cloud Hosting</span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>স্ট্যাটাস: <span className="text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">সক্রিয়</span></span>
-        </span>
-      </footer>
+      {/* Notifications Modal */}
+      {showNotificationsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-[#0d1527] border border-[#1e2d48] p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1e2d48]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#00d293]/10 text-[#00d293] flex items-center justify-center">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">নোটিফিকেশন সেন্টার</h3>
+                  <span className="text-[11px] text-slate-400">সর্বশেষ আপডেট ও অফার</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNotificationsModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#162238] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
+                <span className="text-xs font-bold text-[#00d293] block">⚡ ডিপোজিট সিস্টেম আপডেট</span>
+                <p className="text-[11px] text-slate-300">
+                  বিকাশ (01614572747), নগদ (01304104492) এবং Binance Pay (922593999) এর মাধ্যমে ইনস্ট্যান্ট ডিপোজিট সুবিধা চালু রয়েছে।
+                </p>
+                <span className="text-[10px] text-slate-500 block pt-1">১ ঘণ্টা আগে</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
+                <span className="text-xs font-bold text-amber-400 block">🛍️ নতুন টেলিগ্রাম মিনি অ্যাপ ফাইল</span>
+                <p className="text-[11px] text-slate-300">
+                  স্টোরে নতুন ২০২৬ এর ভিআইপি ফাইল ও সোর্স কোড যুক্ত হয়েছে। মাত্র ২৫০ টাকায় ডাউনলোড করুন।
+                </p>
+                <span className="text-[10px] text-slate-500 block pt-1">৩ ঘণ্টা আগে</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
+                <span className="text-xs font-bold text-sky-400 block">🤖 ক্লাউড হোস্টিং ২৪/৭ অ্যাক্টিভ</span>
+                <p className="text-[11px] text-slate-300">
+                  আপনার ডিপ্লয় করা টেলিগ্রাম বটসমূহ বিরতিহীনভাবে ক্লাউড সার্ভারে সচল থাকবে।
+                </p>
+                <span className="text-[10px] text-slate-500 block pt-1">১ দিন আগে</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowNotificationsModal(false)}
+              className="w-full py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs cursor-pointer"
+            >
+              ঠিক আছে (Close)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

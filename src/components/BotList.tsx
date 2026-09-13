@@ -13,6 +13,8 @@ interface BotListProps {
   onOpenNewBotModal: () => void;
   onOpenFileEditor?: (botId: string) => void;
   onOpenSafeUpload?: (bot: HostedBot) => void;
+  hasActivePlan?: boolean;
+  onOpenPlans?: () => void;
   lang: 'bn' | 'en';
 }
 
@@ -27,6 +29,8 @@ export const BotList: React.FC<BotListProps> = ({
   onOpenNewBotModal,
   onOpenFileEditor,
   onOpenSafeUpload,
+  hasActivePlan = false,
+  onOpenPlans,
   lang
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -111,13 +115,24 @@ export const BotList: React.FC<BotListProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewBotModal}
-          className="px-4 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-semibold shadow-sm shadow-[#0088cc]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{lang === 'bn' ? '+ নতুন বট ডিপ্লয় করুন' : '+ Deploy New Bot'}</span>
-        </button>
+        {hasActivePlan ? (
+          <button
+            onClick={onOpenNewBotModal}
+            className="px-4 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold shadow-sm shadow-[#0088cc]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{lang === 'bn' ? '+ নতুন বট ডিপ্লয় করুন' : '+ Deploy New Bot'}</span>
+          </button>
+        ) : (
+          <button
+            onClick={onOpenPlans}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+            title={lang === 'bn' ? 'বট ডিপ্লয় করতে প্রথমে যেকোনো একটি প্ল্যান কিনুন' : 'Buy a plan to unlock Deploy Bot'}
+          >
+            <Sparkles className="w-4 h-4 text-slate-950" />
+            <span>{lang === 'bn' ? '🔒 প্ল্যান কিনুন (Buy Plan)' : '🔒 Buy Plan (Deploy Bot)'}</span>
+          </button>
+        )}
       </div>
 
       {/* Empty State when no bots */}
@@ -130,18 +145,32 @@ export const BotList: React.FC<BotListProps> = ({
             {lang === 'bn' ? 'কোনো বট এখনও হোস্ট করা হয়নি' : 'No bots hosted yet'}
           </h3>
           <p className="text-xs text-[#64748b] dark:text-[#94a3b8] max-w-md mx-auto mt-1.5 leading-relaxed">
-            {lang === 'bn'
-              ? 'আপনার পাইথন বট ফাইল (.py) বা জিপ ফাইল আপলোড করে এক ক্লিকে লাইভ হোস্ট করুন।'
-              : 'Upload your Python bot files or zip archive to get instant 24/7 background hosting.'}
+            {hasActivePlan
+              ? (lang === 'bn'
+                  ? 'আপনার পাইথন বট ফাইল (.py) বা জিপ ফাইল আপলোড করে এক ক্লিকে লাইভ হোস্ট করুন।'
+                  : 'Upload your Python bot files or zip archive to get instant 24/7 background hosting.')
+              : (lang === 'bn'
+                  ? 'বট ডিপ্লয় করতে যেকোনো একটি প্ল্যান (১ মাস, ৩ মাস, ৬ মাস বা ১ বছর) কিনুন। কেনার সাথে সাথে নতুন বট হোস্ট করার সুবিধা চালু হবে।'
+                  : 'Purchase a hosting plan (1 month, 3 months, 6 months or 1 year) to unlock bot deployment.')}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={onOpenNewBotModal}
-              className="px-5 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-semibold shadow-sm shadow-[#0088cc]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{lang === 'bn' ? '+ প্রথম বট হোস্ট করুন' : '+ Host Your First Bot'}</span>
-            </button>
+            {hasActivePlan ? (
+              <button
+                onClick={onOpenNewBotModal}
+                className="px-5 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold shadow-sm shadow-[#0088cc]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{lang === 'bn' ? '+ প্রথম বট হোস্ট করুন' : '+ Host Your First Bot'}</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenPlans}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{lang === 'bn' ? '🔒 প্ল্যান কিনুন (Buy Plan Now)' : '🔒 Buy Plan Now'}</span>
+              </button>
+            )}
           </div>
         </div>
       )}

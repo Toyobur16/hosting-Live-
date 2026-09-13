@@ -23,10 +23,24 @@ const SESSIONS_FILE = path.join(HOSTED_BOTS_DIR, 'sessions.json');
 const PLANS_FILE = path.join(HOSTED_BOTS_DIR, 'plans.json');
 const PLAN_REQUESTS_FILE = path.join(HOSTED_BOTS_DIR, 'plan_requests.json');
 const PAYMENT_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'payment_settings.json');
+const BANNERS_FILE = path.join(HOSTED_BOTS_DIR, 'banners.json');
+const CATEGORIES_FILE = path.join(HOSTED_BOTS_DIR, 'categories.json');
+const STORE_ITEMS_FILE = path.join(HOSTED_BOTS_DIR, 'store_items.json');
+const SUPPORT_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'support_settings.json');
+const SUPPORT_MESSAGES_FILE = path.join(HOSTED_BOTS_DIR, 'support_messages.json');
+const WISHLIST_FILE = path.join(HOSTED_BOTS_DIR, 'wishlist.json');
+const STORE_UPLOADS_DIR = path.join(HOSTED_BOTS_DIR, 'store_uploads');
+const STORE_THUMBNAILS_DIR = path.join(HOSTED_BOTS_DIR, 'store_thumbnails');
 
 // Ensure base directories and persistence files exist
 if (!fs.existsSync(HOSTED_BOTS_DIR)) {
   fs.mkdirSync(HOSTED_BOTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(STORE_UPLOADS_DIR)) {
+  fs.mkdirSync(STORE_UPLOADS_DIR, { recursive: true });
+}
+if (!fs.existsSync(STORE_THUMBNAILS_DIR)) {
+  fs.mkdirSync(STORE_THUMBNAILS_DIR, { recursive: true });
 }
 if (!fs.existsSync(REGISTRY_FILE)) {
   fs.writeFileSync(REGISTRY_FILE, JSON.stringify([], null, 2), 'utf-8');
@@ -167,18 +181,102 @@ if (!fs.existsSync(PLAN_REQUESTS_FILE)) {
 }
 
 const DEFAULT_PAYMENT_SETTINGS = {
-  binanceUid: '849201948',
-  binancePayId: '849201948',
-  binanceId: 'USDT (TRC20): TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
-  bkashNumber: '01711223344 (Personal - Send Money)',
-  nagadNumber: '01811223344 (Personal - Send Money)',
-  rocketNumber: '01911223344 (Personal - Send Money)',
-  instructionsBn: 'বাইন্যান্স (Binance Pay / UID) দিয়ে নির্ধারিত ডলার পাঠিয়ে আপনার Transaction ID / Order ID এবং আপনার প্রেরক আইডি নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার প্লান সক্রিয় হবে।',
-  instructionsEn: 'Send USDT via Binance Pay / UID, then submit your Binance Transaction ID / Order ID below. Once approved by admin, your plan activates instantly.'
+  binanceUid: '922593999',
+  binancePayId: '922593999',
+  binanceId: '922593999',
+  binanceEnabled: true,
+  bkashNumber: '01614572747',
+  bkashEnabled: true,
+  nagadNumber: '01304104492',
+  nagadEnabled: true,
+  rocketNumber: '01304104492',
+  rocketEnabled: false,
+  instructionsBn: 'বিকাশ, নগদ বা বাইন্যান্সে সেন্ড মানি করে Transaction ID এবং প্রেরক নাম্বার নিচে সাবমিট করুন। এডমিন অনুমোদন করলেই ওয়ালেট ব্যালেন্স স্বয়ংক্রিয়ভাবে যোগ হবে।',
+  instructionsEn: 'Send money via bKash, Nagad or Binance and submit the Transaction ID & sender info below.'
 };
 
 if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
   fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(DEFAULT_PAYMENT_SETTINGS, null, 2), 'utf-8');
+} else {
+  // Ensure default numbers match current screenshot specs if old placeholders are present
+  try {
+    const curr = JSON.parse(fs.readFileSync(PAYMENT_SETTINGS_FILE, 'utf-8'));
+    if (curr.bkashNumber?.includes('01711223344') || !curr.bkashNumber) {
+      curr.bkashNumber = '01614572747';
+      curr.nagadNumber = '01304104492';
+      curr.binanceId = '922593999';
+      curr.binanceUid = '922593999';
+      curr.binancePayId = '922593999';
+      fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(curr, null, 2), 'utf-8');
+    }
+  } catch {}
+}
+
+const DEFAULT_BANNERS = [
+  {
+    id: 'banner_1',
+    title: 'ওয়েব ফাইল কিনুন সাথে সাথে দামে',
+    titleBn: 'ওয়েব ফাইল কিনুন সাথে সাথে দামে',
+    subtitle: 'HTML5, CSS3, টেলিগ্রাম মিনি অ্যাপ এবং ফুল কোড ফাইল',
+    subtitleBn: 'HTML5, CSS3, টেলিগ্রাম মিনি অ্যাপ এবং ফুল কোড ফাইল',
+    badge: 'অল্প দামে',
+    imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
+    link: 'market',
+    active: true,
+    order: 1
+  },
+  {
+    id: 'banner_2',
+    title: '২৪/৭ ক্লাউড টেলিগ্রাম বট হোস্টিং',
+    titleBn: '২৪/৭ ক্লাউড টেলিগ্রাম বট হোস্টিং',
+    subtitle: 'সুপারফাস্ট স্পিড, লাইভ কনসোল ও স্বয়ংক্রিয় অটো-রিস্টার্ট ওয়াচডগ',
+    subtitleBn: 'সুপারফাস্ট স্পিড, লাইভ কনসোল ও স্বয়ংক্রিয় অটো-রিস্টার্ট ওয়াচডগ',
+    badge: 'সাশ্রয়ী প্লান',
+    imageUrl: 'https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?auto=format&fit=crop&w=1200&q=80',
+    link: 'plans',
+    active: true,
+    order: 2
+  }
+];
+
+if (!fs.existsSync(BANNERS_FILE)) {
+  fs.writeFileSync(BANNERS_FILE, JSON.stringify(DEFAULT_BANNERS, null, 2), 'utf-8');
+}
+
+const DEFAULT_CATEGORIES = [
+  { id: 'vip_file', name: 'VIP FILE', nameBn: 'ভিআইপি ফাইল', icon: 'folder', count: 12, active: true },
+  { id: 'telegram_bots', name: 'Telegram Bots', nameBn: 'টেলিগ্রাম বটস', icon: 'bot', count: 8, active: true },
+  { id: 'mini_apps', name: 'Mini Apps', nameBn: 'মিনি অ্যাপস', icon: 'sparkles', count: 15, active: true },
+  { id: 'hosting_plans', name: 'Hosting Plans', nameBn: 'হোস্টিং প্লান', icon: 'crown', count: 4, active: true }
+];
+
+if (!fs.existsSync(CATEGORIES_FILE)) {
+  fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(DEFAULT_CATEGORIES, null, 2), 'utf-8');
+}
+
+const DEFAULT_STORE_ITEMS: any[] = [];
+
+if (!fs.existsSync(STORE_ITEMS_FILE)) {
+  fs.writeFileSync(STORE_ITEMS_FILE, JSON.stringify(DEFAULT_STORE_ITEMS, null, 2), 'utf-8');
+}
+
+const DEFAULT_SUPPORT_SETTINGS = {
+  email: 'toyoburrahman560@gmail.com',
+  whatsapp: '01304104492',
+  telegram: 'toyoburrahman',
+  workingHours: '24/7 Live Support',
+  noticeBn: 'যেকোনো সাহায্যের জন্য আমাদের ইমেইল, হোয়াটসঅ্যাপ অথবা টেলিগ্রামে সরাসরি যোগাযোগ করুন।',
+  noticeEn: 'For any assistance, contact us directly via Email, WhatsApp or Telegram.'
+};
+
+if (!fs.existsSync(SUPPORT_SETTINGS_FILE)) {
+  fs.writeFileSync(SUPPORT_SETTINGS_FILE, JSON.stringify(DEFAULT_SUPPORT_SETTINGS, null, 2), 'utf-8');
+}
+if (!fs.existsSync(SUPPORT_MESSAGES_FILE)) {
+  fs.writeFileSync(SUPPORT_MESSAGES_FILE, JSON.stringify([], null, 2), 'utf-8');
+}
+if (!fs.existsSync(WISHLIST_FILE)) {
+  fs.writeFileSync(WISHLIST_FILE, JSON.stringify({}, null, 2), 'utf-8');
 }
 
 // In-memory process and log store
@@ -285,9 +383,13 @@ function saveSessions(data: Record<string, string>) {
 
 function getPlans(): any[] {
   try {
-    return JSON.parse(fs.readFileSync(PLANS_FILE, 'utf-8'));
+    const raw = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf-8'));
+    if (Array.isArray(raw)) {
+      return raw.filter((p: any) => p && p.id !== 'free' && (p.durationDays > 0 || p.priceBdt > 0 || p.priceUsd > 0));
+    }
+    return DEFAULT_PLANS.filter((p) => p.id !== 'free');
   } catch {
-    return DEFAULT_PLANS;
+    return DEFAULT_PLANS.filter((p) => p.id !== 'free');
   }
 }
 
@@ -320,11 +422,87 @@ function savePaymentSettings(data: any) {
   fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+function getBanners(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(BANNERS_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_BANNERS;
+  }
+}
+
+function saveBanners(data: any[]) {
+  fs.writeFileSync(BANNERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getCategories(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(CATEGORIES_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_CATEGORIES;
+  }
+}
+
+function saveCategories(data: any[]) {
+  fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getStoreItems(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(STORE_ITEMS_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_STORE_ITEMS;
+  }
+}
+
+function saveStoreItems(data: any[]) {
+  fs.writeFileSync(STORE_ITEMS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getSupportSettings(): any {
+  try {
+    return JSON.parse(fs.readFileSync(SUPPORT_SETTINGS_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_SUPPORT_SETTINGS;
+  }
+}
+
+function saveSupportSettings(data: any) {
+  fs.writeFileSync(SUPPORT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getSupportMessages(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(SUPPORT_MESSAGES_FILE, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveSupportMessages(data: any[]) {
+  fs.writeFileSync(SUPPORT_MESSAGES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getWishlistMap(): Record<string, string[]> {
+  try {
+    return JSON.parse(fs.readFileSync(WISHLIST_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveWishlistMap(data: Record<string, string[]>) {
+  fs.writeFileSync(WISHLIST_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
 function isUserAdmin(user: any): boolean {
   if (!user) return false;
   if (user.role === 'admin') return true;
   const email = (user.email || '').toLowerCase().trim();
-  if (email === 'mdtayburrahman1111@gmail.com' || email === 'toyobur@telegram.bot') {
+  if (
+    email === 'toyoburrahman9090@gmail.com' ||
+    email === 'mdtayburrahman1111@gmail.com' ||
+    email === 'toyobur@telegram.bot'
+  ) {
     return true;
   }
   return false;
@@ -347,23 +525,26 @@ function enrichUserWithPlanAndRole(user: any): any {
   const accounts = getAccounts();
   let changed = false;
 
-  if (isUserAdmin(user) && user.role !== 'admin') {
-    user.role = 'admin';
+  if (isUserAdmin(user)) {
+    if (user.role !== 'admin') {
+      user.role = 'admin';
+      changed = true;
+    }
     user.maxBots = 999;
-    changed = true;
-  }
+    user.plan = user.plan || 'admin_unlimited';
+  } else {
+    // Normal user: require purchased active plan
+    if (!user.plan || user.plan === 'free') {
+      user.plan = 'none';
+      user.maxBots = 0;
+      changed = true;
+    }
 
-  if (!user.plan) {
-    user.plan = 'free';
-    user.maxBots = user.role === 'admin' ? 999 : 1;
-    changed = true;
-  }
-
-  if (user.role !== 'admin' && user.planExpiresAt && user.planExpiresAt < Date.now()) {
-    user.plan = 'free';
-    user.maxBots = 1;
-    user.planExpiresAt = null;
-    changed = true;
+    if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
+      user.plan = 'expired';
+      user.maxBots = 0;
+      changed = true;
+    }
   }
 
   if (typeof user.balanceBdt !== 'number') {
@@ -1326,6 +1507,39 @@ app.post('/api/admin/plans/add', (req, res) => {
   res.json({ success: true, message: 'নতুন প্যাকেজ সফলভাবে যুক্ত হয়েছে (New plan added)', plan: newPlan, plans });
 });
 
+// Admin Edit Plan
+app.post('/api/admin/plans/:id/edit', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { nameBn, nameEn, durationDays, maxBots, priceBdt, priceUsd, popular, featuresBn, featuresEn } = req.body;
+
+  let plans = getPlans();
+  const planIdx = plans.findIndex((p) => p.id === id);
+  if (planIdx === -1) {
+    return res.status(404).json({ error: 'Plan not found' });
+  }
+
+  plans[planIdx] = {
+    ...plans[planIdx],
+    nameBn: (nameBn || plans[planIdx].nameBn || '').trim(),
+    nameEn: (nameEn || plans[planIdx].nameEn || '').trim(),
+    durationDays: parseInt(durationDays, 10) || plans[planIdx].durationDays || 30,
+    maxBots: parseInt(maxBots, 10) || plans[planIdx].maxBots || 1,
+    priceBdt: typeof priceBdt !== 'undefined' ? parseFloat(priceBdt) : plans[planIdx].priceBdt,
+    priceUsd: typeof priceUsd !== 'undefined' ? parseFloat(priceUsd) : plans[planIdx].priceUsd,
+    popular: typeof popular !== 'undefined' ? Boolean(popular) : plans[planIdx].popular,
+    featuresBn: Array.isArray(featuresBn) ? featuresBn : (featuresBn ? featuresBn.split('\n').map((s: string) => s.trim()).filter(Boolean) : plans[planIdx].featuresBn),
+    featuresEn: Array.isArray(featuresEn) ? featuresEn : (featuresEn ? featuresEn.split('\n').map((s: string) => s.trim()).filter(Boolean) : plans[planIdx].featuresEn)
+  };
+
+  savePlans(plans);
+  res.json({ success: true, message: 'প্যাকেজ সফলভাবে আপডেট করা হয়েছে (Plan updated)', plan: plans[planIdx], plans: getPlans() });
+});
+
 // Admin Delete Plan
 app.delete('/api/admin/plans/:id', (req, res) => {
   const admin = getAuthUser(req);
@@ -1346,6 +1560,591 @@ app.delete('/api/admin/plans/:id', (req, res) => {
   savePlans(plans);
 
   res.json({ success: true, message: 'প্যাকেজ ডিলিট করা হয়েছে (Plan deleted)', plans });
+});
+
+// ==========================================
+// STORE, BANNERS, CATEGORIES & PRODUCTS API
+// ==========================================
+
+// Banners
+app.get('/api/store/banners', (req, res) => {
+  const banners = getBanners();
+  const activeBanners = banners.filter((b) => b.active !== false).sort((a, b) => (a.order || 0) - (b.order || 0));
+  res.json({ banners: activeBanners });
+});
+
+app.get('/api/admin/banners', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+  res.json({ banners: getBanners() });
+});
+
+app.post('/api/admin/banners', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { id, title, titleBn, subtitle, subtitleBn, badge, imageUrl, link, active, order } = req.body;
+  if (!title && !titleBn) return res.status(400).json({ error: 'Banner title is required' });
+
+  const banners = getBanners();
+  const bannerId = id || `banner_${Date.now()}`;
+  const existingIdx = banners.findIndex((b) => b.id === bannerId);
+
+  const bannerData = {
+    id: bannerId,
+    title: title || titleBn || 'অফার',
+    titleBn: titleBn || title || 'অফার',
+    subtitle: subtitle || subtitleBn || '',
+    subtitleBn: subtitleBn || subtitle || '',
+    badge: badge || 'অল্প দামে',
+    imageUrl: imageUrl || 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
+    link: link || 'market',
+    active: active !== false,
+    order: parseInt(order, 10) || 1
+  };
+
+  if (existingIdx >= 0) {
+    banners[existingIdx] = bannerData;
+  } else {
+    banners.push(bannerData);
+  }
+
+  saveBanners(banners);
+  res.json({ success: true, banner: bannerData, banners });
+});
+
+app.delete('/api/admin/banners/:id', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  let banners = getBanners();
+  banners = banners.filter((b) => b.id !== req.params.id);
+  saveBanners(banners);
+  res.json({ success: true, banners });
+});
+
+// Categories
+app.get('/api/store/categories', (req, res) => {
+  const categories = getCategories();
+  const activeCats = categories.filter((c) => c.active !== false);
+  res.json({ categories: activeCats });
+});
+
+app.get('/api/admin/categories', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+  res.json({ categories: getCategories() });
+});
+
+app.post('/api/admin/categories', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { id, name, nameBn, icon, count, active } = req.body;
+  if (!name) return res.status(400).json({ error: 'Category name is required' });
+
+  const categories = getCategories();
+  const catId = (id || name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).trim();
+  const existingIdx = categories.findIndex((c) => c.id === catId);
+
+  const catData = {
+    id: catId,
+    name: name.trim(),
+    nameBn: (nameBn || name).trim(),
+    icon: icon || 'folder',
+    count: parseInt(count, 10) || 0,
+    active: active !== false
+  };
+
+  if (existingIdx >= 0) {
+    categories[existingIdx] = catData;
+  } else {
+    categories.push(catData);
+  }
+
+  saveCategories(categories);
+  res.json({ success: true, category: catData, categories });
+});
+
+app.delete('/api/admin/categories/:id', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  let categories = getCategories();
+  categories = categories.filter((c) => c.id !== req.params.id);
+  saveCategories(categories);
+  res.json({ success: true, categories });
+});
+
+// Store Items / Files
+app.get('/api/store/items', (req, res) => {
+  const items = getStoreItems();
+  const { category, search, featured } = req.query;
+
+  let filtered = items.filter((i) => i.active !== false);
+  if (category && category !== 'all') {
+    filtered = filtered.filter((i) => i.categoryId === category);
+  }
+  if (featured === 'true') {
+    filtered = filtered.filter((i) => i.featured);
+  }
+  if (search && typeof search === 'string') {
+    const q = search.toLowerCase().trim();
+    filtered = filtered.filter(
+      (i) =>
+        i.title.toLowerCase().includes(q) ||
+        (i.titleBn && i.titleBn.toLowerCase().includes(q)) ||
+        (i.description && i.description.toLowerCase().includes(q))
+    );
+  }
+
+  res.json({ items: filtered });
+});
+
+// Serve uploaded store thumbnails
+app.get('/api/store/thumbnails/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(STORE_THUMBNAILS_DIR, filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).send('Thumbnail not found');
+  }
+});
+
+// Admin direct file and thumbnail upload endpoint
+app.post('/api/admin/upload-file', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { fileName, fileData, fileType } = req.body;
+  if (!fileName || !fileData) {
+    return res.status(400).json({ error: 'File name and file data are required' });
+  }
+
+  try {
+    const base64Data = fileData.includes(',') ? fileData.split(',')[1] : fileData;
+    const buffer = Buffer.from(base64Data, 'base64');
+    const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const timestamp = Date.now();
+
+    if (fileType === 'thumbnail') {
+      const storedFileName = `thumb_${timestamp}_${cleanName}`;
+      const destPath = path.join(STORE_THUMBNAILS_DIR, storedFileName);
+      fs.writeFileSync(destPath, buffer);
+      return res.json({
+        success: true,
+        url: `/api/store/thumbnails/${storedFileName}`,
+        storedFileName,
+        originalFileName: fileName
+      });
+    } else {
+      // product file / script / zip / rar / code
+      const storedFileName = `product_${timestamp}_${cleanName}`;
+      const destPath = path.join(STORE_UPLOADS_DIR, storedFileName);
+      fs.writeFileSync(destPath, buffer);
+
+      const bytes = buffer.length;
+      let sizeFormatted = `${(bytes / 1024).toFixed(1)} KB`;
+      if (bytes >= 1024 * 1024) {
+        sizeFormatted = `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+      }
+
+      return res.json({
+        success: true,
+        storedFileName,
+        originalFileName: fileName,
+        fileSizeFormatted: sizeFormatted
+      });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'File upload failed' });
+  }
+});
+
+app.get('/api/admin/store-items', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+  res.json({ items: getStoreItems() });
+});
+
+app.post('/api/admin/store-items', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const {
+    id,
+    title,
+    titleBn,
+    categoryId,
+    categoryName,
+    priceBdt,
+    priceUsd,
+    rating,
+    downloads,
+    badge,
+    imageUrl,
+    description,
+    planId,
+    fileUrl,
+    originalFileName,
+    fileStorageName,
+    fileSizeFormatted,
+    featured,
+    active
+  } = req.body;
+
+  if (!title) return res.status(400).json({ error: 'Item title is required' });
+
+  const items = getStoreItems();
+  const itemId = id || `item_${Date.now()}`;
+  const existingIdx = items.findIndex((i) => i.id === itemId);
+
+  const itemData = {
+    id: itemId,
+    title: title.trim(),
+    titleBn: (titleBn || title).trim(),
+    categoryId: categoryId || 'vip_file',
+    categoryName: categoryName || 'VIP FILE',
+    priceBdt: parseFloat(priceBdt) || 0,
+    priceUsd: parseFloat(priceUsd) || 0,
+    rating: typeof rating !== 'undefined' ? parseFloat(rating) : 5,
+    downloads: parseInt(downloads, 10) || 0,
+    badge: badge || 'সাশ্রয়ী দামে',
+    imageUrl: imageUrl || '',
+    description: description || '',
+    planId: planId || '',
+    fileUrl: fileUrl || '',
+    originalFileName: originalFileName || (existingIdx >= 0 ? items[existingIdx].originalFileName : ''),
+    fileStorageName: fileStorageName || (existingIdx >= 0 ? items[existingIdx].fileStorageName : ''),
+    fileSizeFormatted: fileSizeFormatted || (existingIdx >= 0 ? items[existingIdx].fileSizeFormatted : ''),
+    featured: Boolean(featured),
+    active: active !== false,
+    createdAt: items[existingIdx]?.createdAt || new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) {
+    items[existingIdx] = itemData;
+  } else {
+    items.push(itemData);
+  }
+
+  saveStoreItems(items);
+  res.json({ success: true, item: itemData, items });
+});
+
+app.delete('/api/admin/store-items/:id', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  let items = getStoreItems();
+  items = items.filter((i) => i.id !== req.params.id);
+  saveStoreItems(items);
+  res.json({ success: true, items });
+});
+
+// Buy Store Item with Wallet Balance
+app.post('/api/store/items/:id/buy', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Please login to purchase files or plans' });
+
+  const { currency } = req.body;
+  const items = getStoreItems();
+  const item = items.find((i) => i.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  const payCurrency = currency === 'BDT' ? 'BDT' : 'USD';
+  const price = payCurrency === 'BDT' ? item.priceBdt : item.priceUsd;
+
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === user.id);
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+  targetUser.balanceBdt = typeof targetUser.balanceBdt === 'number' ? targetUser.balanceBdt : 0;
+  targetUser.balanceUsd = typeof targetUser.balanceUsd === 'number' ? targetUser.balanceUsd : 0;
+
+  if (payCurrency === 'USD') {
+    if (targetUser.balanceUsd < price) {
+      return res.status(400).json({
+        error: `পর্যাপ্ত USD ব্যালেন্স নেই। প্রয়োজন: $${price} USD, বর্তমান: $${targetUser.balanceUsd.toFixed(2)} USD। ডিপোজিট করুন।`,
+        needsDeposit: true,
+        requiredAmount: price,
+        currentBalance: targetUser.balanceUsd,
+        currency: 'USD'
+      });
+    }
+    targetUser.balanceUsd = parseFloat((targetUser.balanceUsd - price).toFixed(2));
+  } else {
+    if (targetUser.balanceBdt < price) {
+      return res.status(400).json({
+        error: `পর্যাপ্ত BDT ব্যালেন্স নেই। প্রয়োজন: ৳${price} BDT, বর্তমান: ৳${targetUser.balanceBdt.toFixed(2)} BDT। ডিপোজিট করুন।`,
+        needsDeposit: true,
+        requiredAmount: price,
+        currentBalance: targetUser.balanceBdt,
+        currency: 'BDT'
+      });
+    }
+    targetUser.balanceBdt = parseFloat((targetUser.balanceBdt - price).toFixed(2));
+  }
+
+  // Increment item download / purchase count
+  item.downloads = (item.downloads || 0) + 1;
+  saveStoreItems(items);
+
+  // Record user purchased items
+  targetUser.purchasedItemIds = targetUser.purchasedItemIds || [];
+  if (!targetUser.purchasedItemIds.includes(item.id)) {
+    targetUser.purchasedItemIds.push(item.id);
+  }
+  targetUser.purchasedItems = targetUser.purchasedItems || [];
+  targetUser.purchasedItems.push({
+    itemId: item.id,
+    title: item.title,
+    titleBn: item.titleBn,
+    priceBdt: item.priceBdt,
+    priceUsd: item.priceUsd,
+    fileUrl: item.fileUrl || '',
+    purchasedAt: Date.now()
+  });
+
+  // If item corresponds to a hosting plan, activate it!
+  if (item.planId) {
+    const plans = getPlans();
+    const matchedPlan = plans.find((p) => p.id === item.planId);
+    if (matchedPlan) {
+      const durationDays = matchedPlan.durationDays || 30;
+      targetUser.plan = matchedPlan.id;
+      targetUser.maxBots = matchedPlan.maxBots || 3;
+      const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
+      targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+    }
+  }
+
+  saveAccounts(accounts);
+
+  // Send notification & email alert
+  sendEmailAlert({
+    to: targetUser.email,
+    userId: targetUser.id,
+    type: 'plan_purchased',
+    subject: `🎉 সফল কেনাকাটা: ${item.titleBn || item.title}`,
+    html: `<p>প্রিয় ${targetUser.name}, আপনি সফলভাবে <strong>${item.titleBn || item.title}</strong> ক্রয় করেছেন। ওয়ালেট থেকে ${price} ${payCurrency} কাটা হয়েছে।</p>`,
+    text: `আপনি সফলভাবে ${item.titleBn || item.title} ক্রয় করেছেন।`
+  });
+
+  const downloadUrl = item.fileUrl || `/api/store/items/${item.id}/download`;
+
+  res.json({
+    success: true,
+    message: `🎉 অভিনন্দন! "${item.titleBn || item.title}" সফলভাবে ক্রয় সম্পন্ন হয়েছে।`,
+    user: enrichUserWithPlanAndRole(targetUser),
+    item,
+    downloadUrl
+  });
+});
+
+// Authenticated Download Endpoint for Store Files
+app.get('/api/store/items/:id/download', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1] || (req.query.token as string);
+  let user: any = null;
+  if (token) {
+    try {
+      if (token.startsWith('bt_')) {
+        const payloadStr = Buffer.from(token.replace('bt_', ''), 'base64url').toString('utf-8');
+        const payload = JSON.parse(payloadStr);
+        const accounts = getAccounts();
+        user = accounts.find((a) => a.id === payload.userId) || null;
+      }
+    } catch {}
+  }
+
+  const items = getStoreItems();
+  const item = items.find((i) => i.id === req.params.id);
+  if (!item) return res.status(404).send('Item not found');
+
+  const isAdmin = isUserAdmin(user);
+  const hasPurchased = user && Array.isArray(user.purchasedItemIds) && user.purchasedItemIds.includes(item.id);
+
+  if (!isAdmin && !hasPurchased) {
+    return res.status(403).send('এই ফাইলটি ডাউনলোড করার আগে আপনাকে ক্রয় করতে হবে (Purchase required to download)');
+  }
+
+  // 1. If admin uploaded an actual file (zip, rar, py, json, etc.), stream it directly!
+  if (item.fileStorageName) {
+    const uploadedFilePath = path.join(STORE_UPLOADS_DIR, item.fileStorageName);
+    if (fs.existsSync(uploadedFilePath)) {
+      const clientFileName = item.originalFileName || `${(item.title || 'download').replace(/[^a-zA-Z0-9_-]/g, '_')}.zip`;
+      return res.download(uploadedFilePath, clientFileName);
+    }
+  }
+
+  // 2. If external fileUrl is specified, redirect to it
+  if (item.fileUrl && (item.fileUrl.startsWith('http://') || item.fileUrl.startsWith('https://'))) {
+    return res.redirect(item.fileUrl);
+  }
+
+  // Provide a clean ready-to-use Telegram Bot / Mini App Source Code Bundle
+  const safeFilename = (item.title || 'telegram_source_bundle').replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.py"`);
+  res.setHeader('Content-Type', 'text/x-python; charset=utf-8');
+
+  const sampleSourceCode = `# ========================================================
+# ${item.title}
+# Downloaded from App Store Premium Portal
+# Customer: ${user?.name || 'Authorized Buyer'} (${user?.email || ''})
+# Generated at: ${new Date().toISOString()}
+# ========================================================
+
+import os
+import sys
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+logging.basicConfig(level=logging.INFO)
+
+# Mini App Configuration
+WEB_APP_URL = "https://ai.studio/build"
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_name = update.effective_user.first_name
+    keyboard = [
+        [InlineKeyboardButton("🚀 Open Mini App", web_app=WebAppInfo(url=WEB_APP_URL))],
+        [InlineKeyboardButton("💰 Check Wallet Balance", callback_data="wallet")],
+        [InlineKeyboardButton("💬 24/7 Support", url="https://t.me/toyoburrahman")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        f"👋 Welcome {user_name}! Your Telegram Mini App is ready to run.",
+        reply_markup=reply_markup
+    )
+
+def main():
+    token = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(CommandHandler("start", start))
+    print("🤖 Bot started successfully on 24/7 Cloud Host!")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
+`;
+
+  res.send(sampleSourceCode);
+});
+
+// ==========================================
+// SUPPORT CENTER & MESSAGES API
+// ==========================================
+app.get('/api/support/settings', (req, res) => {
+  res.json({ settings: getSupportSettings() });
+});
+
+app.post('/api/admin/support-settings', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const current = getSupportSettings();
+  const updated = { ...current, ...req.body };
+  saveSupportSettings(updated);
+  res.json({ success: true, settings: updated });
+});
+
+app.post('/api/support/message', (req, res) => {
+  const user = getAuthUser(req);
+  const { subject, message, name, email } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'মেসেজ লেখা আবশ্যক (Message required)' });
+  }
+
+  const messages = getSupportMessages();
+  const newMsg = {
+    id: `msg_${Date.now()}`,
+    userId: user?.id || 'guest',
+    userName: user?.name || name || 'Customer',
+    userEmail: user?.email || email || 'No email',
+    subject: subject?.trim() || 'General Inquiry',
+    message: message.trim(),
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  messages.unshift(newMsg);
+  saveSupportMessages(messages);
+
+  res.json({
+    success: true,
+    message: 'আপনার মেসেজটি সফলভাবে সাপোর্ট টিমের কাছে পাঠানো হয়েছে! শীঘ্রই যোগাযোগ করা হবে।',
+    supportMessage: newMsg
+  });
+});
+
+app.get('/api/admin/support-messages', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+  res.json({ messages: getSupportMessages() });
+});
+
+app.post('/api/admin/support-messages/:id/reply', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { id } = req.params;
+  const { reply, status } = req.body;
+  const messages = getSupportMessages();
+  const idx = messages.findIndex((m) => m.id === id);
+
+  if (idx === -1) return res.status(404).json({ error: 'Message not found' });
+
+  messages[idx].reply = reply || messages[idx].reply;
+  messages[idx].status = status || 'replied';
+  messages[idx].repliedAt = new Date().toISOString();
+  messages[idx].repliedBy = admin?.email || 'admin';
+
+  saveSupportMessages(messages);
+  res.json({ success: true, message: messages[idx] });
+});
+
+// ==========================================
+// WISHLIST API
+// ==========================================
+app.get('/api/wishlist', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.json({ items: [] });
+
+  const map = getWishlistMap();
+  const itemIds = map[user.id] || [];
+  const allItems = getStoreItems();
+  const wishlistItems = allItems.filter((i) => itemIds.includes(i.id));
+
+  res.json({ itemIds, items: wishlistItems });
+});
+
+app.post('/api/wishlist/toggle', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Please login to save wishlist' });
+
+  const { itemId } = req.body;
+  if (!itemId) return res.status(400).json({ error: 'Item ID required' });
+
+  const map = getWishlistMap();
+  const list = map[user.id] || [];
+  const idx = list.indexOf(itemId);
+
+  let inWishlist = false;
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    inWishlist = false;
+  } else {
+    list.push(itemId);
+    inWishlist = true;
+  }
+
+  map[user.id] = list;
+  saveWishlistMap(map);
+
+  res.json({ success: true, inWishlist, itemIds: list });
 });
 
 app.get('/api/admin/all-bots', (req, res) => {
@@ -1383,15 +2182,34 @@ app.post('/api/bots', (req, res) => {
   }
 
   const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'বট হোস্ট করতে প্রথমে আপনার অ্যাকাউন্টে লগইন করুন (Please login to deploy bots)' });
+  }
+
   const reg = getRegistry();
 
-  // Enforce Free vs Paid Plan Bot Limits
-  if (user && user.role !== 'admin') {
+  // Enforce Paid Plan Requirement (user must have bought an active plan, admin is exempt)
+  if (user.role !== 'admin') {
+    const hasActivePlan = Boolean(
+      user.plan &&
+      user.plan !== 'none' &&
+      user.plan !== 'free' &&
+      user.plan !== 'expired' &&
+      (!user.planExpiresAt || user.planExpiresAt > Date.now())
+    );
+
+    if (!hasActivePlan) {
+      return res.status(403).json({
+        error: 'বট ডিপ্লয় করতে হলে প্রথমে যেকোনো একটি হোস্টিং প্লান (১ মাস, ৩ মাস, ৬ মাস বা ১ বছর) ক্রয় করুন। প্লান সক্রিয় হলেই নতুন বট ডিপ্লয় করতে পারবেন।',
+        planRequired: true
+      });
+    }
+
     const userBots = reg.filter((b) => b.ownerId === user.id || b.owner === user.id || (b.ownerEmail && b.ownerEmail.toLowerCase() === user.email.toLowerCase()));
     const maxAllowed = user.maxBots || 1;
     if (userBots.length >= maxAllowed) {
       return res.status(403).json({
-        error: `আপনার বর্তমান প্লানের সীমা (${maxAllowed}টি বট) পূর্ণ হয়েছে। অতিরিক্ত বট হোস্ট করতে ১ মাস থেকে ১ বছর মেয়াদি প্লান কিনুন এবং এডমিন অনুমোদনের পর নতুন বট তৈরি করুন।`,
+        error: `আপনার বর্তমান প্লানের সীমা (${maxAllowed}টি বট) পূর্ণ হয়েছে। অতিরিক্ত বট হোস্ট করতে প্লান আপগ্রেড করুন।`,
         planRequired: true,
         currentBots: userBots.length,
         maxBots: maxAllowed

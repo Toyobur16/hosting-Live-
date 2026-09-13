@@ -3,9 +3,13 @@ import {
   X, ShieldCheck, Users, CheckCircle2, XCircle, Clock, Search,
   RefreshCw, Bot, CreditCard, DollarSign, Settings, AlertTriangle,
   Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert,
-  Plus, Wallet, ArrowRight, Link
+  Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones
 } from 'lucide-react';
 import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
+import { AdminStoreManager } from './admin/AdminStoreManager';
+import { AdminBannersManager } from './admin/AdminBannersManager';
+import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
+import { AdminSupportManager } from './admin/AdminSupportManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -22,7 +26,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   lang,
   onBotAction
 }) => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'payments' | 'bots'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'store' | 'banners' | 'categories' | 'support' | 'pricing' | 'payments' | 'bots'>('requests');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<{
     totalUsers: number;
@@ -454,6 +458,54 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           >
             <Users className="w-3.5 h-3.5" />
             <span>{lang === 'bn' ? 'ইউজার ও ওয়ালেট' : 'Users & Wallets'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'store'
+                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-[#00d293]" />
+            <span>{lang === 'bn' ? 'স্টোর পণ্য ও ফাইল' : 'Store Products'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('banners')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'banners'
+                ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? 'ব্যানার স্লাইডার' : 'Banners'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'categories'
+                ? 'bg-[#0088cc] text-white shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <Folder className="w-3.5 h-3.5" />
+            <span>{lang === 'bn' ? 'ক্যাটেগরি' : 'Categories'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('support')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'support'
+                ? 'bg-[#0088cc] text-white shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <Headphones className="w-3.5 h-3.5 text-sky-400" />
+            <span>{lang === 'bn' ? 'সাপোর্ট ইনবক্স' : 'Support Inbox'}</span>
           </button>
 
           <button
@@ -1164,6 +1216,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ))}
           </div>
         )}
+
+        {/* Store Products Control Tab */}
+        {activeTab === 'store' && <AdminStoreManager />}
+
+        {/* Hero Banners Control Tab */}
+        {activeTab === 'banners' && <AdminBannersManager />}
+
+        {/* Categories Control Tab */}
+        {activeTab === 'categories' && <AdminCategoriesManager />}
+
+        {/* Support Inbox & Settings Tab */}
+        {activeTab === 'support' && <AdminSupportManager />}
 
       </div>
     </div>

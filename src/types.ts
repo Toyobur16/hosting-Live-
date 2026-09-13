@@ -1,3 +1,69 @@
+export interface StoreBanner {
+  id: string;
+  title: string;
+  titleBn?: string;
+  subtitle: string;
+  subtitleBn?: string;
+  badge?: string;
+  imageUrl: string;
+  link?: string;
+  active: boolean;
+  order?: number;
+}
+
+export interface StoreCategory {
+  id: string;
+  name: string;
+  nameBn?: string;
+  icon: string;
+  count?: number;
+  active: boolean;
+}
+
+export interface StoreItem {
+  id: string;
+  title: string;
+  titleBn?: string;
+  categoryId: string;
+  categoryName?: string;
+  priceBdt: number;
+  priceUsd: number;
+  rating: number;
+  downloads: number;
+  badge?: string;
+  imageUrl: string;
+  description?: string;
+  planId?: string;
+  fileUrl?: string;
+  originalFileName?: string;
+  fileStorageName?: string;
+  fileSizeFormatted?: string;
+  featured?: boolean;
+  active: boolean;
+  createdAt?: string;
+}
+
+export interface SupportSettings {
+  email: string;
+  whatsapp: string;
+  telegram: string;
+  workingHours?: string;
+  noticeBn?: string;
+  noticeEn?: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  userId?: string;
+  userName: string;
+  userEmail: string;
+  subject: string;
+  message: string;
+  status: 'pending' | 'resolved' | 'replied';
+  reply?: string;
+  createdAt: string;
+}
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -8,6 +74,13 @@ export interface AuthUser {
   maxBots?: number;
   balanceBdt?: number;
   balanceUsd?: number;
+  purchasedItemIds?: string[];
+  purchasedItems?: Array<{
+    itemId: string;
+    title: string;
+    fileUrl?: string;
+    purchasedAt: number;
+  }>;
   avatar?: string;
   isVerified?: boolean;
   verificationToken?: string;
@@ -57,6 +130,7 @@ export interface UserNotification {
 
 export interface PlanRequest {
   id: string;
+  type?: 'plan_purchase' | 'deposit';
   userId: string;
   userName: string;
   userEmail: string;
@@ -67,6 +141,7 @@ export interface PlanRequest {
   currency: string;
   method: string;
   senderNumber: string;
+  senderIdentifier?: string;
   transactionId: string;
   note?: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -78,10 +153,14 @@ export interface PlanRequest {
 export interface PaymentSettings {
   binanceUid?: string;
   binancePayId?: string;
-  bkashNumber: string;
-  nagadNumber: string;
-  rocketNumber: string;
   binanceId: string;
+  binanceEnabled?: boolean;
+  bkashNumber: string;
+  bkashEnabled?: boolean;
+  nagadNumber: string;
+  nagadEnabled?: boolean;
+  rocketNumber: string;
+  rocketEnabled?: boolean;
   instructionsBn?: string;
   instructionsEn?: string;
 }

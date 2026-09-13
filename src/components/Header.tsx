@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Settings, Globe, Plus, LogOut, User, CheckCircle2, Moon, Sun, ShieldCheck, Crown, ShieldAlert } from 'lucide-react';
+import { Terminal, Settings, Globe, Plus, LogOut, User, CheckCircle2, Moon, Sun, ShieldCheck, Crown, ShieldAlert, Wallet } from 'lucide-react';
 import { HostedBot, AuthUser } from '../types';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   onOpenSettingsModal: (initialTab?: string) => void;
   onOpenTokenChecker: () => void;
   onOpenPlansModal?: () => void;
+  onOpenWalletPage?: () => void;
   onOpenAdminModal?: () => void;
   pendingRequestsCount?: number;
   lang: 'bn' | 'en';
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettingsModal,
   onOpenTokenChecker,
   onOpenPlansModal,
+  onOpenWalletPage,
   onOpenAdminModal,
   pendingRequestsCount = 0,
   lang,
@@ -43,8 +45,16 @@ export const Header: React.FC<HeaderProps> = ({
   const isAdmin = Boolean(
     user && (
       user.role === 'admin' ||
+      user.email?.toLowerCase().trim() === 'toyoburrahman9090@gmail.com' ||
       user.email?.toLowerCase().trim() === 'mdtayburrahman1111@gmail.com' ||
       user.email?.toLowerCase().trim() === 'toyobur@telegram.bot'
+    )
+  );
+
+  const hasActivePlan = Boolean(
+    user && (
+      isAdmin ||
+      (user.plan && user.plan !== 'free' && user.plan !== 'none' && user.plan !== 'expired' && (!user.planExpiresAt || user.planExpiresAt > Date.now()))
     )
   );
 
@@ -111,22 +121,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls & User info */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Plans & Wallet Button */}
+          {/* Hosting Plans Button */}
           {onOpenPlansModal && (
             <button
               id="header-plans-btn"
               onClick={onOpenPlansModal}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-              title={lang === 'bn' ? 'হোস্টিং প্লান ও ওয়ালেট ডিপোজিট' : 'Purchase Hosting Plans & Wallet'}
+              title={lang === 'bn' ? 'হোস্টিং প্যাকেজ সমূহ দেখুন' : 'View Hosting Plans'}
             >
               <Crown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span>{lang === 'bn' ? 'প্লান ও ওয়ালেট' : 'Plans & Wallet'}</span>
-              {user && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-black">
-                  ৳{user.balanceBdt || 0}
-                </span>
-              )}
-              {user?.plan && user.plan !== 'free' && (
+              <span>{lang === 'bn' ? '👑 হোস্টিং প্লান' : '👑 Hosting Plans'}</span>
+              {user?.plan && user.plan !== 'free' && user.plan !== 'none' && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold uppercase">
                   {user.plan.replace('_', ' ')}
                 </span>
@@ -134,19 +139,19 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Admin Panel Button (visible ONLY to admins) */}
-          {isAdmin && onOpenAdminModal && (
+          {/* Wallet & Deposit Button */}
+          {(onOpenWalletPage || onOpenPlansModal) && (
             <button
-              id="header-admin-btn"
-              onClick={onOpenAdminModal}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-              title={lang === 'bn' ? 'এডমিন কন্ট্রোল প্যানেল' : 'Admin Control Panel'}
+              id="header-wallet-btn"
+              onClick={onOpenWalletPage || onOpenPlansModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              title={lang === 'bn' ? 'ডিপোজিট ও ওয়ালেট ব্যালেন্স' : 'Wallet & Deposit Hub'}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-              <span>{lang === 'bn' ? 'এডমিন প্যানেল' : 'Admin Panel'}</span>
-              {pendingRequestsCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
-                  {pendingRequestsCount}
+              <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{lang === 'bn' ? '💳 ওয়ালেট ও ডিপোজিট' : '💳 Wallet & Deposit'}</span>
+              {user && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black">
+                  ${user.balanceUsd || 0}
                 </span>
               )}
             </button>
@@ -163,15 +168,27 @@ export const Header: React.FC<HeaderProps> = ({
             <span>{lang === 'bn' ? 'টোকেন চেক' : 'Check Token'}</span>
           </button>
 
-          {/* New Bot Button */}
-          <button
-            id="header-deploy-bot-btn"
-            onClick={onOpenNewBotModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white transition-all shadow-sm shadow-[#0088cc]/20 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>{lang === 'bn' ? '+ বট ডিপ্লয়' : '+ Deploy Bot'}</span>
-          </button>
+          {/* Deploy Bot Button (locked with 'Buy Plan' if no active plan purchased) */}
+          {hasActivePlan ? (
+            <button
+              id="header-deploy-bot-btn"
+              onClick={onOpenNewBotModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white transition-all shadow-sm shadow-[#0088cc]/20 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? '+ বট ডিপ্লয়' : '+ Deploy Bot'}</span>
+            </button>
+          ) : (
+            <button
+              id="header-buy-plan-btn"
+              onClick={onOpenPlansModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-black rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 transition-all shadow-md shadow-amber-500/20 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              title={lang === 'bn' ? 'বট হোস্ট করতে প্রথমে প্ল্যান কিনুন' : 'Buy a plan to deploy bots'}
+            >
+              <Crown className="w-3.5 h-3.5 text-slate-950" />
+              <span>{lang === 'bn' ? '🔒 প্ল্যান কিনুন' : '🔒 Buy Plan'}</span>
+            </button>
+          )}
 
           {/* Settings & Tools Button */}
           <button
