@@ -14,6 +14,9 @@ const HOSTED_BOTS_DIR = path.join(process.cwd(), 'hosted_bots');
 const REGISTRY_FILE = path.join(HOSTED_BOTS_DIR, 'registry.json');
 const ACCOUNTS_FILE = path.join(HOSTED_BOTS_DIR, 'accounts.json');
 const SESSIONS_FILE = path.join(HOSTED_BOTS_DIR, 'sessions.json');
+const PLANS_FILE = path.join(HOSTED_BOTS_DIR, 'plans.json');
+const PLAN_REQUESTS_FILE = path.join(HOSTED_BOTS_DIR, 'plan_requests.json');
+const PAYMENT_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'payment_settings.json');
 
 // Ensure base directories and persistence files exist
 if (!fs.existsSync(HOSTED_BOTS_DIR)) {
@@ -27,6 +30,147 @@ if (!fs.existsSync(ACCOUNTS_FILE)) {
 }
 if (!fs.existsSync(SESSIONS_FILE)) {
   fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2), 'utf-8');
+}
+
+const DEFAULT_PLANS = [
+  {
+    id: 'free',
+    nameBn: 'ফ্রি ট্রায়াল প্লান',
+    nameEn: 'Free Starter',
+    durationDays: 0,
+    maxBots: 1,
+    priceBdt: 0,
+    priceUsd: 0,
+    popular: false,
+    featuresBn: [
+      '১টি টেলিগ্রাম বট লাইভ হোস্টিং',
+      '২৪/৭ ক্লাউড রানটাইম ওয়াচডগ',
+      'লাইভ টার্মিনাল কনসোল ও রিয়েল-টাইম লগ',
+      'অটোমেটিক ডাটাবেজ ব্যাকআপ ও ব্যালেন্স সুরক্ষা'
+    ],
+    featuresEn: [
+      '1 Telegram Bot Live Hosting',
+      '24/7 Cloud Runtime Watchdog',
+      'Live Terminal Console & Real-time Logs',
+      'Automatic Database Backup & Balance Safety'
+    ]
+  },
+  {
+    id: '1_month',
+    nameBn: '১ মাস প্লান',
+    nameEn: '1 Month Plan',
+    durationDays: 30,
+    maxBots: 3,
+    priceBdt: 150,
+    priceUsd: 1.50,
+    popular: false,
+    featuresBn: [
+      '৩টি টেলিগ্রাম বট একসাথে লাইভ',
+      '১ মাস (৩০ দিন) সার্বক্ষণিক লাইভ হোস্টিং',
+      'হাই-স্পিড প্রায়োরিটি রানটাইম সিপিইউ',
+      'ব্যালেন্স ও ডাটাবেজ অটো-প্রোটেকশন',
+      'পাইপ (Pip) লাইব্রেরি প্যাকেজ ম্যানেজার'
+    ],
+    featuresEn: [
+      '3 Telegram Bots Concurrent Live',
+      '1 Month (30 Days) Continuous Hosting',
+      'High-speed Priority CPU Runtime',
+      'Balance & Database Auto-Protection',
+      'Python Pip Library Package Manager'
+    ]
+  },
+  {
+    id: '3_months',
+    nameBn: '৩ মাস প্রিমিয়াম',
+    nameEn: '3 Months Plan',
+    durationDays: 90,
+    maxBots: 5,
+    priceBdt: 400,
+    priceUsd: 4.00,
+    popular: true,
+    featuresBn: [
+      '৫টি টেলিগ্রাম বট লাইভ হোস্টিং',
+      '৩ মাস (৯০ দিন) প্রিমিয়াম ক্লাউড সার্ভার',
+      'ইনস্ট্যান্ট রিস্টার্ট ও অটো-হিলিং ওয়াচডগ',
+      'ফুল ফাইল এডিটর ও ডাটাবেজ সিঙ্ক',
+      'প্রাইভেট ভিআইপি সাপোর্ট'
+    ],
+    featuresEn: [
+      '5 Telegram Bots Live Hosting',
+      '3 Months (90 Days) Premium Cloud Server',
+      'Instant Restart & Auto-Healing Watchdog',
+      'Full File Editor & Database Sync',
+      'Private VIP Support'
+    ]
+  },
+  {
+    id: '6_months',
+    nameBn: '৬ মাস বিজনেস',
+    nameEn: '6 Months Plan',
+    durationDays: 180,
+    maxBots: 10,
+    priceBdt: 750,
+    priceUsd: 7.50,
+    popular: false,
+    featuresBn: [
+      '১০টি টেলিগ্রাম বট লাইভ হোস্টিং',
+      '৬ মাস (১৮০ দিন) হাই-পারফরম্যান্স ক্লাউড',
+      'আনলিমিটেড ডাটাবেজ স্ন্যাপশট ও রিস্টোর',
+      'এসএমএস ও ওটিপি গেটওয়ে সাপোর্ট',
+      'ভিআইপি প্রায়োরিটি প্রসেস'
+    ],
+    featuresEn: [
+      '10 Telegram Bots Live Hosting',
+      '6 Months (180 Days) High-Performance Cloud',
+      'Unlimited Database Snapshots & Restore',
+      'SMS & OTP Gateway Support',
+      'VIP Priority Process'
+    ]
+  },
+  {
+    id: '1_year',
+    nameBn: '১ বছর আনলিমিটেড',
+    nameEn: '1 Year Plan',
+    durationDays: 365,
+    maxBots: 999,
+    priceBdt: 1400,
+    priceUsd: 14.00,
+    popular: false,
+    featuresBn: [
+      'আনলিমিটেড টেলিগ্রাম বট লাইভ হোস্টিং',
+      '১ বছর (৩৬৫ দিন) ডেডিকেটেড ভিআইপি ক্লাউড',
+      'লাইফটাইম ডাটা ও ব্যালেন্স সুরক্ষা গ্যারান্টি',
+      'সর্বোচ্চ ব্যান্ডউইথ ও ব্যাকগ্রাউন্ড পারফরম্যান্স',
+      '২৪/৭ এডমিন ডিরেক্ট সাপোর্ট ও হেল্প'
+    ],
+    featuresEn: [
+      'Unlimited Telegram Bots Live Hosting',
+      '1 Year (365 Days) Dedicated VIP Cloud',
+      'Lifetime Data & Balance Safety Guarantee',
+      'Maximum Bandwidth & Background Performance',
+      '24/7 Direct Admin Support & Assistance'
+    ]
+  }
+];
+
+if (!fs.existsSync(PLANS_FILE)) {
+  fs.writeFileSync(PLANS_FILE, JSON.stringify(DEFAULT_PLANS, null, 2), 'utf-8');
+}
+if (!fs.existsSync(PLAN_REQUESTS_FILE)) {
+  fs.writeFileSync(PLAN_REQUESTS_FILE, JSON.stringify([], null, 2), 'utf-8');
+}
+
+const DEFAULT_PAYMENT_SETTINGS = {
+  bkashNumber: '01711223344 (Personal - Send Money)',
+  nagadNumber: '01811223344 (Personal - Send Money)',
+  rocketNumber: '01911223344 (Personal - Send Money)',
+  binanceId: 'USDT (TRC20): TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
+  instructionsBn: 'যেকোনো মেথডে টাকা সেন্ড মানি (Send Money) করার পর আপনার প্রেরক নাম্বার (Sender Number) ও Transaction ID (TrxID) নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার প্লান সক্রিয় হবে।',
+  instructionsEn: 'Send money to the provided number/wallet, then submit your Sender Phone Number and Transaction ID (TrxID) below. Once approved by admin, your plan activates instantly.'
+};
+
+if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
+  fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(DEFAULT_PAYMENT_SETTINGS, null, 2), 'utf-8');
 }
 
 // In-memory process and log store
@@ -131,6 +275,52 @@ function saveSessions(data: Record<string, string>) {
   fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+function getPlans(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(PLANS_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_PLANS;
+  }
+}
+
+function savePlans(data: any[]) {
+  fs.writeFileSync(PLANS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getPlanRequests(): any[] {
+  try {
+    return JSON.parse(fs.readFileSync(PLAN_REQUESTS_FILE, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+function savePlanRequests(data: any[]) {
+  fs.writeFileSync(PLAN_REQUESTS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getPaymentSettings(): any {
+  try {
+    return JSON.parse(fs.readFileSync(PAYMENT_SETTINGS_FILE, 'utf-8'));
+  } catch {
+    return DEFAULT_PAYMENT_SETTINGS;
+  }
+}
+
+function savePaymentSettings(data: any) {
+  fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function isUserAdmin(user: any): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const email = (user.email || '').toLowerCase().trim();
+  if (email === 'mdtayburrahman1111@gmail.com' || email === 'toyobur@telegram.bot') {
+    return true;
+  }
+  return false;
+}
+
 function generateAuthToken(user: any): string {
   const payload = {
     userId: user.id,
@@ -141,6 +331,41 @@ function generateAuthToken(user: any): string {
     expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 // Valid for 30 days (persists across 24h)
   };
   return `bt_${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+}
+
+function enrichUserWithPlanAndRole(user: any): any {
+  if (!user) return null;
+  const accounts = getAccounts();
+  let changed = false;
+
+  if (isUserAdmin(user) && user.role !== 'admin') {
+    user.role = 'admin';
+    user.maxBots = 999;
+    changed = true;
+  }
+
+  if (!user.plan) {
+    user.plan = 'free';
+    user.maxBots = user.role === 'admin' ? 999 : 1;
+    changed = true;
+  }
+
+  if (user.role !== 'admin' && user.planExpiresAt && user.planExpiresAt < Date.now()) {
+    user.plan = 'free';
+    user.maxBots = 1;
+    user.planExpiresAt = null;
+    changed = true;
+  }
+
+  if (changed) {
+    const idx = accounts.findIndex((a) => a.id === user.id);
+    if (idx !== -1) {
+      accounts[idx] = { ...accounts[idx], ...user };
+      saveAccounts(accounts);
+    }
+  }
+
+  return user;
 }
 
 // Auth Middleware (Token based with 30-day session persistence)
@@ -157,7 +382,7 @@ function getAuthUser(req: express.Request): any | null {
   if (sessions[token]) {
     const userId = sessions[token];
     const user = accounts.find((a) => a.id === userId);
-    if (user) return user;
+    if (user) return enrichUserWithPlanAndRole(user);
   }
 
   // 2. Structured self-healing token (retains login across container restarts for 30 days)
@@ -170,18 +395,22 @@ function getAuthUser(req: express.Request): any | null {
           (a) => a.id === payload.userId || (payload.email && a.email?.toLowerCase() === payload.email.toLowerCase())
         );
         if (!user) {
+          const isAdmin = accounts.length === 0 || 
+            (payload.email && (payload.email.toLowerCase() === 'mdtayburrahman1111@gmail.com' || payload.email.toLowerCase() === 'toyobur@telegram.bot'));
           user = {
             id: payload.userId,
             name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User'),
             email: payload.email || 'user@bot-host.local',
-            role: payload.role || (accounts.length === 0 ? 'admin' : 'user')
+            role: isAdmin ? 'admin' : (payload.role || 'user'),
+            plan: 'free',
+            maxBots: isAdmin ? 999 : 1
           };
           accounts.push(user);
           saveAccounts(accounts);
         }
         sessions[token] = user.id;
         saveSessions(sessions);
-        return user;
+        return enrichUserWithPlanAndRole(user);
       }
     } catch {
       // Invalid payload
@@ -530,6 +759,360 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Google Direct Login route
+app.post('/api/auth/google', (req, res) => {
+  try {
+    const { credential, email: directEmail, name: directName, picture: directPicture, googleId: directGoogleId } = req.body;
+    let email = '';
+    let name = '';
+    let picture = '';
+    let googleId = '';
+
+    if (credential && typeof credential === 'string') {
+      try {
+        const parts = credential.split('.');
+        if (parts.length >= 2) {
+          const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+          const payload = JSON.parse(payloadJson);
+          email = payload.email || '';
+          name = payload.name || payload.given_name || email.split('@')[0];
+          picture = payload.picture || '';
+          googleId = payload.sub || '';
+        }
+      } catch (err) {
+        console.error('Failed to parse Google JWT:', err);
+      }
+    }
+
+    if (!email && directEmail) {
+      email = directEmail;
+      name = directName || directEmail.split('@')[0];
+      picture = directPicture || '';
+      googleId = directGoogleId || '';
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: 'Google sign-in did not provide a valid email address' });
+    }
+
+    email = email.trim().toLowerCase();
+    name = (name || email.split('@')[0]).trim();
+
+    const accounts = getAccounts();
+    let user = accounts.find((a) => a.email && a.email.toLowerCase() === email);
+
+    const isAdmin = accounts.length === 0 ||
+      email === 'mdtayburrahman1111@gmail.com' ||
+      email === 'toyobur@telegram.bot' ||
+      (user && user.role === 'admin');
+
+    if (!user) {
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      user = {
+        id: userId,
+        name,
+        email,
+        avatar: picture || '',
+        googleId,
+        role: isAdmin ? 'admin' : 'user',
+        plan: 'free',
+        maxBots: isAdmin ? 999 : 1,
+        planExpiresAt: null,
+        isVerified: true,
+        createdAt: new Date().toISOString()
+      };
+      accounts.push(user);
+      saveAccounts(accounts);
+    } else {
+      let changed = false;
+      if (picture && !user.avatar) {
+        user.avatar = picture;
+        changed = true;
+      }
+      if (isAdmin && user.role !== 'admin') {
+        user.role = 'admin';
+        user.maxBots = 999;
+        changed = true;
+      }
+      if (!user.isVerified) {
+        user.isVerified = true;
+        changed = true;
+      }
+      if (!user.plan) {
+        user.plan = 'free';
+        user.maxBots = user.role === 'admin' ? 999 : 1;
+        changed = true;
+      }
+      if (changed) {
+        saveAccounts(accounts);
+      }
+    }
+
+    user = enrichUserWithPlanAndRole(user);
+    const token = generateAuthToken(user);
+    const sessions = getSessions();
+    sessions[token] = user.id;
+    saveSessions(sessions);
+
+    return res.json({ success: true, token, user });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Google login failed' });
+  }
+});
+
+// Hosting Plans & Payment Endpoints
+app.get('/api/plans', (req, res) => {
+  res.json({ plans: getPlans() });
+});
+
+app.get('/api/payment-settings', (req, res) => {
+  res.json({ settings: getPaymentSettings() });
+});
+
+app.post('/api/plans/purchase', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'প্লান কিনতে প্রথমে লগইন করুন (Please login to purchase a plan)' });
+  }
+
+  const { planId, method, senderNumber, transactionId, note } = req.body;
+  if (!planId) return res.status(400).json({ error: 'প্লান নির্বাচন করুন (Plan is required)' });
+  if (!senderNumber || !senderNumber.trim()) return res.status(400).json({ error: 'প্রেরক ফোন নাম্বার দিন (Sender phone number is required)' });
+  if (!transactionId || !transactionId.trim()) return res.status(400).json({ error: 'Transaction ID (TrxID) দিন' });
+
+  const plans = getPlans();
+  const plan = plans.find((p) => p.id === planId);
+  if (!plan) {
+    return res.status(404).json({ error: 'Invalid plan selected' });
+  }
+
+  const requests = getPlanRequests();
+  const newRequest = {
+    id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+    planId: plan.id,
+    planName: plan.nameBn,
+    durationDays: plan.durationDays,
+    amount: plan.priceBdt,
+    currency: 'BDT',
+    method: method || 'bkash',
+    senderNumber: senderNumber.trim(),
+    transactionId: transactionId.trim().toUpperCase(),
+    note: (note || '').trim(),
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  requests.unshift(newRequest);
+  savePlanRequests(requests);
+
+  res.json({
+    success: true,
+    message: 'আপনার প্লান রিকোয়েস্ট সফলভাবে জমা হয়েছে। এডমিন ভেরিফাই করে অনুমোদন (Approve) করলেই প্লান সক্রিয় হবে।',
+    request: newRequest
+  });
+});
+
+app.get('/api/plans/my-request', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const requests = getPlanRequests();
+  const userRequests = requests.filter((r) => r.userId === user.id || (r.userEmail && r.userEmail.toLowerCase() === user.email.toLowerCase()));
+  const latest = userRequests.length > 0 ? userRequests[0] : null;
+
+  res.json({
+    latestRequest: latest,
+    allRequests: userRequests,
+    userPlan: user.plan || 'free',
+    planExpiresAt: user.planExpiresAt || null,
+    maxBots: user.maxBots || 1
+  });
+});
+
+// Admin Panel Endpoints
+app.get('/api/admin/overview', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const accounts = getAccounts();
+  const reg = getRegistry();
+  const requests = getPlanRequests();
+  const pendingRequests = requests.filter((r) => r.status === 'pending');
+  const approvedRequests = requests.filter((r) => r.status === 'approved');
+  const totalRevenue = approvedRequests.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  res.json({
+    totalUsers: accounts.length,
+    totalBots: reg.length,
+    runningBots: runningProcesses.size,
+    pendingRequestsCount: pendingRequests.length,
+    approvedRequestsCount: approvedRequests.length,
+    totalRevenueBdt: totalRevenue,
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/admin/plan-requests', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  res.json({ requests: getPlanRequests() });
+});
+
+app.post('/api/admin/plan-requests/:id/approve', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const requests = getPlanRequests();
+  const reqIdx = requests.findIndex((r) => r.id === id);
+  if (reqIdx === -1) {
+    return res.status(404).json({ error: 'Plan request not found' });
+  }
+
+  const request = requests[reqIdx];
+  if (request.status === 'approved') {
+    return res.status(400).json({ error: 'Request is already approved' });
+  }
+
+  request.status = 'approved';
+  request.reviewedAt = new Date().toISOString();
+  request.reviewedBy = admin ? admin.email : 'admin';
+  savePlanRequests(requests);
+
+  // Update target user account
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === request.userId || (a.email && a.email.toLowerCase() === request.userEmail.toLowerCase()));
+  if (targetUser) {
+    const durationDays = request.durationDays || 30;
+    targetUser.plan = request.planId;
+    const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
+    targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+
+    if (request.planId === '1_month') targetUser.maxBots = 3;
+    else if (request.planId === '3_months') targetUser.maxBots = 5;
+    else if (request.planId === '6_months') targetUser.maxBots = 10;
+    else if (request.planId === '1_year') targetUser.maxBots = 999;
+    else targetUser.maxBots = 1;
+
+    saveAccounts(accounts);
+  }
+
+  res.json({ success: true, message: 'প্লান সফলভাবে অনুমোদন করা হয়েছে (Plan approved successfully)', request, updatedUser: targetUser });
+});
+
+app.post('/api/admin/plan-requests/:id/reject', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { reason } = req.body;
+  const requests = getPlanRequests();
+  const reqIdx = requests.findIndex((r) => r.id === id);
+  if (reqIdx === -1) {
+    return res.status(404).json({ error: 'Plan request not found' });
+  }
+
+  const request = requests[reqIdx];
+  request.status = 'rejected';
+  request.rejectReason = reason || 'Invalid transaction or unpaid';
+  request.reviewedAt = new Date().toISOString();
+  request.reviewedBy = admin ? admin.email : 'admin';
+  savePlanRequests(requests);
+
+  res.json({ success: true, message: 'প্লান রিকোয়েস্ট বাতিল করা হয়েছে (Plan request rejected)', request });
+});
+
+app.get('/api/admin/users', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const accounts = getAccounts();
+  const reg = getRegistry();
+
+  const enrichedUsers = accounts.map((a) => {
+    const userBots = reg.filter((b) => b.ownerId === a.id || b.owner === a.id || (b.ownerEmail && b.ownerEmail.toLowerCase() === a.email.toLowerCase()));
+    return {
+      ...a,
+      botsCount: userBots.length,
+      activePlan: a.plan || 'free',
+      isExpired: a.planExpiresAt ? a.planExpiresAt < Date.now() : false,
+      expiresAtFormatted: a.planExpiresAt ? new Date(a.planExpiresAt).toLocaleDateString() : 'N/A'
+    };
+  });
+
+  res.json({ users: enrichedUsers });
+});
+
+app.post('/api/admin/users/:id/update-plan', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  const { plan, durationDays, maxBots, role } = req.body;
+
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === id);
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+  if (plan) targetUser.plan = plan;
+  if (maxBots !== undefined) targetUser.maxBots = parseInt(maxBots, 10);
+  if (role) targetUser.role = role;
+  if (durationDays !== undefined) {
+    const days = parseInt(durationDays, 10);
+    if (days > 0) {
+      targetUser.planExpiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
+    } else {
+      targetUser.planExpiresAt = null;
+    }
+  }
+
+  saveAccounts(accounts);
+  res.json({ success: true, user: targetUser });
+});
+
+app.post('/api/admin/payment-settings', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const settings = req.body;
+  savePaymentSettings(settings);
+  res.json({ success: true, settings });
+});
+
+app.get('/api/admin/all-bots', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const reg = getRegistry();
+  const enriched = reg.map((b) => ({
+    ...b,
+    status: runningProcesses.has(b.id) ? 'running' : b.status || 'stopped',
+    pid: runningProcesses.has(b.id) ? runningProcesses.get(b.id)!.process.pid : null
+  }));
+
+  res.json({ bots: enriched });
+});
+
 // 2. Bot management
 app.get('/api/bots', (req, res) => {
   const reg = getRegistry();
@@ -546,6 +1129,23 @@ app.post('/api/bots', (req, res) => {
   const { name, entryFile, token, files, zipBase64, autoStart } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Bot name is required' });
+  }
+
+  const user = getAuthUser(req);
+  const reg = getRegistry();
+
+  // Enforce Free vs Paid Plan Bot Limits
+  if (user && user.role !== 'admin') {
+    const userBots = reg.filter((b) => b.ownerId === user.id || b.owner === user.id || (b.ownerEmail && b.ownerEmail.toLowerCase() === user.email.toLowerCase()));
+    const maxAllowed = user.maxBots || 1;
+    if (userBots.length >= maxAllowed) {
+      return res.status(403).json({
+        error: `আপনার বর্তমান প্লানের সীমা (${maxAllowed}টি বট) পূর্ণ হয়েছে। অতিরিক্ত বট হোস্ট করতে ১ মাস থেকে ১ বছর মেয়াদি প্লান কিনুন এবং এডমিন অনুমোদনের পর নতুন বট তৈরি করুন।`,
+        planRequired: true,
+        currentBots: userBots.length,
+        maxBots: maxAllowed
+      });
+    }
   }
 
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'bot';
@@ -652,14 +1252,17 @@ app.post('/api/bots', (req, res) => {
     status: 'stopped',
     pid: null,
     uptime: '0s',
-    owner: 'user',
+    owner: user ? user.id : 'user',
+    ownerId: user ? user.id : 'guest',
+    ownerName: user ? user.name : 'Guest',
+    ownerEmail: user ? user.email : '',
     autoRestart: autoStart !== false,
     lastPing: new Date().toISOString()
   };
 
-  const reg = getRegistry();
-  reg.push(newBot);
-  saveRegistry(reg);
+  const updatedReg = getRegistry();
+  updatedReg.push(newBot);
+  saveRegistry(updatedReg);
 
   // Background install requirements if present, without blocking API response
   const reqPath = path.join(botDir, 'requirements.txt');
@@ -958,6 +1561,301 @@ app.post('/api/bots/:id/upload-zip', (req, res) => {
       }, 600);
     }
     res.json({ success: true });
+  });
+});
+
+// Safe File Update with 100% User Balance & Database Protection
+app.post('/api/bots/:id/safe-update', (req, res) => {
+  const { id } = req.params;
+  const { files, zipBase64, restart = true, preserveDatabases = true, autoConnectDatabase = true } = req.body;
+
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  if (!fs.existsSync(botDir)) {
+    fs.mkdirSync(botDir, { recursive: true });
+  }
+
+  // 1. Take a safe timestamped snapshot of all existing database files
+  const snapshotTimestamp = Date.now();
+  const snapshotDir = path.join(botDir, '_db_snapshots', `backup_${snapshotTimestamp}`);
+  fs.mkdirSync(snapshotDir, { recursive: true });
+
+  const existingFiles = fs.readdirSync(botDir);
+  const preservedDatabases: string[] = [];
+  const existingDbContents = new Map<string, string>();
+
+  const PROTECTED_DB_FILES = [
+    'users.json',
+    'user_stats.json',
+    'paid_sms.json',
+    'referral_data.json',
+    'banned_users.json',
+    'withdraw_requests.json',
+    'datarange.json',
+    'custom_services.json',
+    'activity_logs.json'
+  ];
+
+  for (const f of existingFiles) {
+    if (f.endsWith('.json') && !f.startsWith('_')) {
+      const fullPath = path.join(botDir, f);
+      try {
+        if (fs.statSync(fullPath).isFile()) {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          existingDbContents.set(f, content);
+          fs.writeFileSync(path.join(snapshotDir, f), content, 'utf-8');
+          preservedDatabases.push(f);
+        }
+      } catch (err) {}
+    }
+  }
+
+  let updatedFileCount = 0;
+
+  // 2. Handle files array
+  if (Array.isArray(files)) {
+    for (const f of files) {
+      if (!f.name) continue;
+      const baseName = path.basename(f.name);
+      const isProtectedDb = PROTECTED_DB_FILES.includes(baseName) || (baseName.endsWith('.json') && existingDbContents.has(baseName));
+
+      if (isProtectedDb && preserveDatabases && existingDbContents.has(baseName)) {
+        const existingData = existingDbContents.get(baseName)!;
+        try {
+          const currentJson = JSON.parse(existingData);
+          if (f.content && typeof f.content === 'string') {
+            const uploadedJson = JSON.parse(f.content);
+            if (typeof currentJson === 'object' && currentJson !== null && !Array.isArray(currentJson)) {
+              const merged = { ...uploadedJson, ...currentJson };
+              fs.writeFileSync(path.join(botDir, baseName), JSON.stringify(merged, null, 2), 'utf-8');
+            }
+          }
+        } catch {
+          // Keep existing safe file untouched
+        }
+        continue;
+      }
+
+      const filePath = path.join(botDir, baseName);
+      if (f.content !== undefined) {
+        fs.writeFileSync(filePath, f.content, 'utf-8');
+        updatedFileCount++;
+      } else if (f.base64) {
+        fs.writeFileSync(filePath, Buffer.from(f.base64, 'base64'));
+        updatedFileCount++;
+      }
+    }
+  }
+
+  // 3. Handle zip archive safely
+  if (zipBase64) {
+    const tempExtractDir = path.join('/tmp', `extract_${id}_${snapshotTimestamp}`);
+    fs.mkdirSync(tempExtractDir, { recursive: true });
+    const tempZipPath = path.join(tempExtractDir, 'upload.zip');
+    fs.writeFileSync(tempZipPath, Buffer.from(zipBase64, 'base64'));
+
+    try {
+      execSync(`python3 -m zipfile -e "${tempZipPath}" "${tempExtractDir}"`);
+      try { fs.unlinkSync(tempZipPath); } catch {}
+
+      const copySafe = (srcDir: string, destDir: string) => {
+        const items = fs.readdirSync(srcDir);
+        for (const item of items) {
+          const srcItem = path.join(srcDir, item);
+          const destItem = path.join(destDir, item);
+          if (fs.statSync(srcItem).isDirectory()) {
+            if (!fs.existsSync(destItem)) fs.mkdirSync(destItem, { recursive: true });
+            copySafe(srcItem, destItem);
+          } else {
+            const isProtected = PROTECTED_DB_FILES.includes(item) || (item.endsWith('.json') && existingDbContents.has(item));
+            if (isProtected && preserveDatabases && existingDbContents.has(item)) {
+              continue;
+            }
+            fs.copyFileSync(srcItem, destItem);
+            updatedFileCount++;
+          }
+        }
+      };
+
+      copySafe(tempExtractDir, botDir);
+      try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch {}
+    } catch (err: any) {
+      appendLog(id, 'error', `Zip update note: ${err.message}`);
+    }
+  }
+
+  // 4. Auto-connect and initialize database files if missing
+  if (autoConnectDatabase) {
+    for (const dbFile of PROTECTED_DB_FILES) {
+      const p = path.join(botDir, dbFile);
+      if (!fs.existsSync(p)) {
+        fs.writeFileSync(p, dbFile === 'activity_logs.json' ? '[]' : '{}', 'utf-8');
+      }
+    }
+  }
+
+  // 5. Read protected user stats
+  let usersCount = 0;
+  let totalBalance = 0;
+  const usersPath = path.join(botDir, 'users.json');
+  if (fs.existsSync(usersPath)) {
+    try {
+      const usersData = JSON.parse(fs.readFileSync(usersPath, 'utf-8'));
+      usersCount = Object.keys(usersData).length;
+      for (const k in usersData) {
+        if (usersData[k] && typeof usersData[k].balance === 'number') {
+          totalBalance += usersData[k].balance;
+        }
+      }
+    } catch {}
+  }
+
+  appendLog(id, 'info', `Safe update completed! Updated ${updatedFileCount} files. Preserved ${preservedDatabases.length} database files (${usersCount} users, total balance: ${totalBalance} सुरक्षित).`);
+
+  if (restart) {
+    stopBotProcess(id);
+    setTimeout(() => {
+      launchBotProcess(bot);
+    }, 600);
+  }
+
+  return res.json({
+    success: true,
+    updatedFileCount,
+    preservedDatabases,
+    backupDir: `_db_snapshots/backup_${snapshotTimestamp}`,
+    databaseStats: {
+      usersCount,
+      totalBalance
+    }
+  });
+});
+
+// Database Auto-Connect & Diagnostic Route
+app.post('/api/bots/:id/database/auto-connect', (req, res) => {
+  const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  if (!fs.existsSync(botDir)) {
+    fs.mkdirSync(botDir, { recursive: true });
+  }
+
+  const STANDARD_FILES = [
+    { name: 'users.json', defaultContent: '{}' },
+    { name: 'user_stats.json', defaultContent: '{}' },
+    { name: 'paid_sms.json', defaultContent: '{}' },
+    { name: 'referral_data.json', defaultContent: '{}' },
+    { name: 'banned_users.json', defaultContent: '{}' },
+    { name: 'withdraw_requests.json', defaultContent: '{}' },
+    { name: 'custom_services.json', defaultContent: '{}' },
+    { name: 'datarange.json', defaultContent: '{}' },
+    { name: 'activity_logs.json', defaultContent: '[]' }
+  ];
+
+  const results: any[] = [];
+  for (const sf of STANDARD_FILES) {
+    const fp = path.join(botDir, sf.name);
+    let created = false;
+    let valid = true;
+    if (!fs.existsSync(fp)) {
+      fs.writeFileSync(fp, sf.defaultContent, 'utf-8');
+      created = true;
+    } else {
+      try {
+        JSON.parse(fs.readFileSync(fp, 'utf-8'));
+      } catch {
+        valid = false;
+      }
+    }
+    results.push({ name: sf.name, created, valid });
+  }
+
+  let usersCount = 0;
+  let totalBalance = 0;
+  try {
+    const usersJson = JSON.parse(fs.readFileSync(path.join(botDir, 'users.json'), 'utf-8'));
+    usersCount = Object.keys(usersJson).length;
+    for (const uid in usersJson) {
+      if (usersJson[uid] && typeof usersJson[uid].balance === 'number') {
+        totalBalance += usersJson[uid].balance;
+      }
+    }
+  } catch {}
+
+  appendLog(id, 'info', `Database Auto-Connect & Verify: All collections connected. Total users: ${usersCount}, Total balance: ${totalBalance}`);
+
+  res.json({
+    success: true,
+    connected: true,
+    stats: {
+      usersCount,
+      totalBalance,
+      files: results
+    }
+  });
+});
+
+// Real-time Database stats for a bot
+app.get('/api/bots/:id/database/stats', (req, res) => {
+  const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  let usersCount = 0;
+  let totalBalance = 0;
+  let paidSmsCount = 0;
+  let withdrawCount = 0;
+
+  try {
+    const usersPath = path.join(botDir, 'users.json');
+    if (fs.existsSync(usersPath)) {
+      const u = JSON.parse(fs.readFileSync(usersPath, 'utf-8'));
+      usersCount = Object.keys(u).length;
+      for (const k in u) {
+        if (u[k] && typeof u[k].balance === 'number') totalBalance += u[k].balance;
+      }
+    }
+  } catch {}
+
+  try {
+    const smsPath = path.join(botDir, 'paid_sms.json');
+    if (fs.existsSync(smsPath)) {
+      const s = JSON.parse(fs.readFileSync(smsPath, 'utf-8'));
+      paidSmsCount = Object.keys(s).length;
+    }
+  } catch {}
+
+  try {
+    const wPath = path.join(botDir, 'withdraw_requests.json');
+    if (fs.existsSync(wPath)) {
+      const w = JSON.parse(fs.readFileSync(wPath, 'utf-8'));
+      withdrawCount = Object.keys(w).length;
+    }
+  } catch {}
+
+  const snapshotsDir = path.join(botDir, '_db_snapshots');
+  let snapshotsCount = 0;
+  if (fs.existsSync(snapshotsDir)) {
+    try {
+      snapshotsCount = fs.readdirSync(snapshotsDir).length;
+    } catch {}
+  }
+
+  res.json({
+    usersCount,
+    totalBalance,
+    paidSmsCount,
+    withdrawCount,
+    snapshotsCount,
+    isHealthy: true
   });
 });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Square, RotateCw, Trash2, Download, Terminal, Radio, Check, Plus, FileCode, CheckCircle2, ShieldCheck, AlertTriangle, Bot, Sparkles } from 'lucide-react';
+import { Play, Square, RotateCw, Trash2, Download, Terminal, Radio, Check, Plus, FileCode, CheckCircle2, ShieldCheck, AlertTriangle, Bot, Sparkles, Upload } from 'lucide-react';
 import { HostedBot } from '../types';
 
 interface BotListProps {
@@ -12,6 +12,7 @@ interface BotListProps {
   onDeleteBot: (botId: string) => void;
   onOpenNewBotModal: () => void;
   onOpenFileEditor?: (botId: string) => void;
+  onOpenSafeUpload?: (bot: HostedBot) => void;
   lang: 'bn' | 'en';
 }
 
@@ -25,6 +26,7 @@ export const BotList: React.FC<BotListProps> = ({
   onDeleteBot,
   onOpenNewBotModal,
   onOpenFileEditor,
+  onOpenSafeUpload,
   lang
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -330,6 +332,22 @@ export const BotList: React.FC<BotListProps> = ({
                       >
                         <FileCode className="w-3 h-3" />
                         <span className="hidden sm:inline">{lang === 'bn' ? 'ফাইলস' : 'Files'}</span>
+                      </button>
+                    )}
+
+                    {/* Safe Upload Button - Preserves User Balances & Data */}
+                    {onOpenSafeUpload && (
+                      <button
+                        id={`safe-upload-bot-${bot.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSafeUpload(bot);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer flex items-center gap-1 shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
+                        title={lang === 'bn' ? 'বট না মুছে নিরাপদ ফাইল আপলোড (ব্যালেন্স অক্ষত থাকবে)' : 'Upload files safely without deleting bot (data preserved)'}
+                      >
+                        <Upload className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>{lang === 'bn' ? 'ফাইল আপলোড' : 'Upload'}</span>
                       </button>
                     )}
 

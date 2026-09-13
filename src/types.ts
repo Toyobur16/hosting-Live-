@@ -2,9 +2,56 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  role?: 'admin' | 'user';
+  plan?: 'free' | '1_month' | '3_months' | '6_months' | '1_year';
+  planExpiresAt?: number | null;
+  maxBots?: number;
+  avatar?: string;
   isVerified?: boolean;
   verificationToken?: string;
   createdAt: string;
+}
+
+export interface HostingPlan {
+  id: 'free' | '1_month' | '3_months' | '6_months' | '1_year';
+  nameBn: string;
+  nameEn: string;
+  durationDays: number;
+  maxBots: number;
+  priceBdt: number;
+  priceUsd: number;
+  popular?: boolean;
+  featuresBn: string[];
+  featuresEn: string[];
+}
+
+export interface PlanRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  planId: string;
+  planName: string;
+  durationDays: number;
+  amount: number;
+  currency: string;
+  method: string;
+  senderNumber: string;
+  transactionId: string;
+  note?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface PaymentSettings {
+  bkashNumber: string;
+  nagadNumber: string;
+  rocketNumber: string;
+  binanceId: string;
+  instructionsBn?: string;
+  instructionsEn?: string;
 }
 
 export interface HostedBot {

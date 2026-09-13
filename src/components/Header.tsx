@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Settings, Globe, Plus, LogOut, User, CheckCircle2, Moon, Sun, ShieldCheck } from 'lucide-react';
+import { Terminal, Settings, Globe, Plus, LogOut, User, CheckCircle2, Moon, Sun, ShieldCheck, Crown, ShieldAlert } from 'lucide-react';
 import { HostedBot, AuthUser } from '../types';
 
 interface HeaderProps {
@@ -9,6 +9,9 @@ interface HeaderProps {
   onOpenNewBotModal: () => void;
   onOpenSettingsModal: (initialTab?: string) => void;
   onOpenTokenChecker: () => void;
+  onOpenPlansModal?: () => void;
+  onOpenAdminModal?: () => void;
+  pendingRequestsCount?: number;
   lang: 'bn' | 'en';
   setLang: (lang: 'bn' | 'en') => void;
   user: AuthUser | null;
@@ -25,6 +28,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewBotModal,
   onOpenSettingsModal,
   onOpenTokenChecker,
+  onOpenPlansModal,
+  onOpenAdminModal,
+  pendingRequestsCount = 0,
   lang,
   setLang,
   user,
@@ -98,6 +104,42 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls & User info */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Plans Button */}
+          {onOpenPlansModal && (
+            <button
+              id="header-plans-btn"
+              onClick={onOpenPlansModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              title={lang === 'bn' ? 'হোস্টিং প্লান ও সাবস্ক্রিপশন কিনুন' : 'Purchase Hosting Plans'}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>{lang === 'bn' ? 'প্লান কিনুন' : 'Plans'}</span>
+              {user?.plan && user.plan !== 'free' && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold uppercase">
+                  {user.plan.replace('_', ' ')}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Admin Panel Button (visible to admins) */}
+          {user?.role === 'admin' && onOpenAdminModal && (
+            <button
+              id="header-admin-btn"
+              onClick={onOpenAdminModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              title={lang === 'bn' ? 'এডমিন কন্ট্রোল প্যানেল' : 'Admin Control Panel'}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span>{lang === 'bn' ? 'এডমিন প্যানেল' : 'Admin Panel'}</span>
+              {pendingRequestsCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
+                  {pendingRequestsCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Token Check Button */}
           <button
             id="header-token-check-btn"

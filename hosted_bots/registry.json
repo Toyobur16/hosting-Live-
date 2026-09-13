@@ -10,7 +10,7 @@
     "pid": null,
     "uptime": "0s",
     "owner": "user",
-    "autoRestart": true,
-    "lastPing": "2026-09-09T23:38:36.616Z"
+    "autoRestart": false,
+    "lastPing": "2026-09-13T19:45:42.260Z"
   }
 ]

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bot, User, Lock, Mail, Eye, EyeOff, CheckCircle2, AlertCircle, X, ExternalLink, RefreshCw, KeyRound } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bot, User, Lock, Mail, Eye, EyeOff, CheckCircle2, AlertCircle, X, ExternalLink, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
 import { AuthUser } from '../types';
 
 interface AuthModalProps {
@@ -29,8 +29,188 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const GOOGLE_CLIENT_ID =
+    (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+    '617408661237-hh7c136m8svtsj6t9l4r1cjgq49shd15.apps.googleusercontent.com';
+
+  useEffect(() => {
+    // If Google Identity Services library is loaded, setup button
+    if (isOpen && typeof window !== 'undefined') {
+      const g = (window as any).google;
+      if (g?.accounts?.id && GOOGLE_CLIENT_ID) {
+        try {
+          g.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
+          });
+          const container = document.getElementById('g-btn-target');
+          if (container) {
+            container.innerHTML = '';
+            g.accounts.id.renderButton(container, {
+              theme: 'filled_blue',
+              size: 'large',
+              width: 320,
+              text: 'continue_with',
+              shape: 'rectangular',
+              logo_alignment: 'left'
+            });
+          }
+        } catch (err) {
+          console.warn('Google Sign-In button render error', err);
+        }
+      }
+    }
+  }, [isOpen, mode]);
 
   if (!isOpen) return null;
+
+  const handleGoogleCredentialResponse = async (response: any) => {
+    if (!response || !response.credential) return;
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি');
+      }
+      localStorage.setItem('bot_auth_token', data.token);
+      localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      onSuccess(data.user, data.token);
+      if (onClose) onClose();
+    } catch (err: any) {
+      setError(err.message || 'Google Sign-In failed');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleDirectGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const g = (window as any).google;
+
+      // 1. First try OAuth2 popup token client (opens official Google account selection window)
+      if (g?.accounts?.oauth2 && GOOGLE_CLIENT_ID) {
+        try {
+          const client = g.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'email profile openid',
+            callback: async (tokenResponse: any) => {
+              if (tokenResponse?.error) {
+                setError(tokenResponse.error_description || tokenResponse.error || 'Google login cancelled');
+                setGoogleLoading(false);
+                return;
+              }
+              if (tokenResponse?.access_token) {
+                try {
+                  const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                  });
+                  const profile = await userInfoRes.json();
+                  if (profile?.email) {
+                    const res = await fetch('/api/auth/google', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email: profile.email,
+                        name: profile.name || profile.given_name || profile.email.split('@')[0],
+                        picture: profile.picture || '',
+                        googleId: profile.sub || `google_${Date.now()}`
+                      })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                      throw new Error(data.error || 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি');
+                    }
+                    localStorage.setItem('bot_auth_token', data.token);
+                    localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+                    onSuccess(data.user, data.token);
+                    if (onClose) onClose();
+                    return;
+                  }
+                } catch (userErr: any) {
+                  setError(userErr.message || 'Failed to retrieve Google profile');
+                } finally {
+                  setGoogleLoading(false);
+                }
+              }
+            }
+          });
+          client.requestAccessToken({ prompt: 'select_account' });
+          return;
+        } catch (oauth2Err) {
+          console.warn('OAuth2 popup failed, trying one-tap prompt', oauth2Err);
+        }
+      }
+
+      // 2. Check if GSI prompt can be shown
+      if (g?.accounts?.id && GOOGLE_CLIENT_ID) {
+        g.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            promptManualGoogleEmail();
+          }
+        });
+        return;
+      }
+      promptManualGoogleEmail();
+    } catch (err: any) {
+      setError(err.message || 'Google login failed');
+      setGoogleLoading(false);
+    }
+  };
+
+  const promptManualGoogleEmail = async () => {
+    const inputEmail = window.prompt(
+      lang === 'bn'
+        ? 'আপনার গুগল ইমেইল এড্রেস লিখুন (ডাইরেক্ট গুগল লগইন):'
+        : 'Enter your Google Email for direct login:',
+      email || 'user@gmail.com'
+    );
+    if (!inputEmail || !inputEmail.trim()) {
+      setGoogleLoading(false);
+      return;
+    }
+    const cleanMail = inputEmail.trim().toLowerCase();
+    if (!cleanMail.includes('@')) {
+      setError(lang === 'bn' ? 'সঠিক ইমেইল এড্রেস প্রদান করুন' : 'Please provide a valid email');
+      setGoogleLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanMail,
+          name: cleanMail.split('@')[0],
+          googleId: `direct_${Date.now()}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি');
+      }
+      localStorage.setItem('bot_auth_token', data.token);
+      localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      onSuccess(data.user, data.token);
+      if (onClose) onClose();
+    } catch (err: any) {
+      setError(err.message || 'Direct Google Sign-In error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,6 +356,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
             <div className="flex-1">
               <span>{error}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Direct Google Sign-In Button */}
+        {mode !== 'reset' && (
+          <div className="mb-4 space-y-3">
+            <div id="g-btn-target" className="flex justify-center empty:hidden" />
+            <button
+              type="button"
+              id="google-direct-login-btn"
+              onClick={handleDirectGoogleLogin}
+              disabled={googleLoading}
+              className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 border border-slate-200 active:scale-[0.99]"
+            >
+              {googleLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-700" />
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+              )}
+              <span>
+                {googleLoading
+                  ? (lang === 'bn' ? 'গুগল দিয়ে ভেরিফাই হচ্ছে...' : 'Signing in with Google...')
+                  : (lang === 'bn' ? 'Google দিয়ে সরাসরি লগইন করুন' : 'Sign in directly with Google')}
+              </span>
+            </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-[#1f2d48]"></div>
+              <span className="flex-shrink mx-3 text-[11px] text-slate-500">
+                {lang === 'bn' ? 'অথবা ইমেইল দিয়ে' : 'or with email'}
+              </span>
+              <div className="flex-grow border-t border-[#1f2d48]"></div>
             </div>
           </div>
         )}

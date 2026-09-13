@@ -7,6 +7,9 @@ import { NewBotModal } from './components/NewBotModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { TokenCheckModal } from './components/TokenCheckModal';
+import { SafeUploadModal } from './components/SafeUploadModal';
+import { PlansModal } from './components/PlansModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
 import { HostedBot, LogEntry, AuthUser } from './types';
 
 export default function App() {
@@ -27,6 +30,11 @@ export default function App() {
   const [showNewBotModal, setShowNewBotModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTokenCheckModal, setShowTokenCheckModal] = useState(false);
+  const [showSafeUploadModal, setShowSafeUploadModal] = useState(false);
+  const [safeUploadBot, setSafeUploadBot] = useState<HostedBot | null>(null);
+  const [showPlansModal, setShowPlansModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
   const [tokenForDeploy, setTokenForDeploy] = useState<{ token: string; botName?: string } | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<string>('overview');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -92,6 +100,25 @@ export default function App() {
       // Offline / network glitch: retain user session from localStorage
     }
   };
+
+  const fetchAdminOverview = async () => {
+    if (currentUser?.role !== 'admin') return;
+    try {
+      const res = await authFetch('/api/admin/overview');
+      if (res.ok) {
+        const data = await res.json();
+        setPendingRequestsCount(data.pendingRequestsCount || 0);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      fetchAdminOverview();
+      const interval = setInterval(fetchAdminOverview, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser]);
 
   const fetchBots = async () => {
     try {
@@ -256,6 +283,9 @@ export default function App() {
           setShowSettingsModal(true);
         }}
         onOpenTokenChecker={() => setShowTokenCheckModal(true)}
+        onOpenPlansModal={() => setShowPlansModal(true)}
+        onOpenAdminModal={() => setShowAdminModal(true)}
+        pendingRequestsCount={pendingRequestsCount}
         lang={lang}
         setLang={setLang}
         user={currentUser}
@@ -376,6 +406,10 @@ export default function App() {
               setSettingsInitialTab('files');
               setShowSettingsModal(true);
             }}
+            onOpenSafeUpload={(bot) => {
+              setSafeUploadBot(bot);
+              setShowSafeUploadModal(true);
+            }}
             lang={lang}
           />
         )}
@@ -461,6 +495,49 @@ export default function App() {
           setShowNewBotModal(true);
         }}
       />
+
+      {showSafeUploadModal && safeUploadBot && (
+        <SafeUploadModal
+          isOpen={showSafeUploadModal}
+          onClose={() => {
+            setShowSafeUploadModal(false);
+            setSafeUploadBot(null);
+          }}
+          bot={safeUploadBot}
+          onSuccess={() => {
+            fetchBots();
+            setToastMessage(
+              lang === 'bn'
+                ? `'${safeUploadBot.name}' এর ফাইল সফলভাবে আপডেট হয়েছে এবং পূর্বের ব্যালেন্স অক্ষত আছে!`
+                : `'${safeUploadBot.name}' files safely updated and balances preserved!`
+            );
+          }}
+          lang={lang}
+        />
+      )}
+
+      {showPlansModal && (
+        <PlansModal
+          isOpen={showPlansModal}
+          onClose={() => setShowPlansModal(false)}
+          user={currentUser}
+          onOpenAuthModal={() => {
+            setShowPlansModal(false);
+            setShowAuthModal(true);
+          }}
+          lang={lang}
+        />
+      )}
+
+      {showAdminModal && (
+        <AdminPanelModal
+          isOpen={showAdminModal}
+          onClose={() => setShowAdminModal(false)}
+          currentUser={currentUser}
+          lang={lang}
+          onBotAction={() => fetchBots()}
+        />
+      )}
 
       <footer className="px-8 py-4 bg-white dark:bg-[#111827] border-t border-[#e2e8f0] dark:border-[#1f293d] text-[#94a3b8] text-xs flex flex-wrap items-center justify-between gap-2 mt-auto transition-colors">
         <span>&copy; Bot-Host — Free Unlimited Telegram Bot Cloud Hosting</span>
