@@ -120,6 +120,33 @@ export default function App() {
     }
   }, [currentUser]);
 
+  // Admin URL Detection (?admin=true or /admin)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isAdminUrl =
+      params.get('admin') === 'true' ||
+      window.location.pathname.startsWith('/admin') ||
+      window.location.hash === '#admin';
+
+    if (isAdminUrl) {
+      if (
+        currentUser &&
+        (currentUser.role === 'admin' ||
+          currentUser.email?.toLowerCase() === 'mdtayburrahman1111@gmail.com' ||
+          currentUser.email?.toLowerCase() === 'toyobur@telegram.bot')
+      ) {
+        setShowAdminModal(true);
+      } else if (!currentUser) {
+        setShowAuthModal(true);
+        setToastMessage(
+          lang === 'bn'
+            ? 'এডমিন প্যানেল এক্সেস করতে এডমিন একাউন্ট mdtayburrahman1111@gmail.com দিয়ে লগইন করুন।'
+            : 'Please log in with admin account to access admin panel.'
+        );
+      }
+    }
+  }, [currentUser, lang]);
+
   const fetchBots = async () => {
     try {
       const res = await authFetch('/api/bots');
@@ -526,6 +553,10 @@ export default function App() {
             setShowAuthModal(true);
           }}
           lang={lang}
+          onUserUpdated={(updated) => {
+            setCurrentUser(updated);
+            checkAuth();
+          }}
         />
       )}
 

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   X, ShieldCheck, Users, CheckCircle2, XCircle, Clock, Search,
   RefreshCw, Bot, CreditCard, DollarSign, Settings, AlertTriangle,
-  Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert
+  Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert,
+  Plus, Wallet, ArrowRight, Link
 } from 'lucide-react';
-import { PlanRequest, AuthUser, HostedBot, PaymentSettings } from '../types';
+import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   lang,
   onBotAction
 }) => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'payments' | 'bots'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'payments' | 'bots'>('requests');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<{
     totalUsers: number;
@@ -34,14 +35,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const [requests, setRequests] = useState<PlanRequest[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [plans, setPlans] = useState<HostingPlan[]>([]);
   const [allBots, setAllBots] = useState<HostedBot[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
     bkashNumber: '',
     nagadNumber: '',
     rocketNumber: '',
     binanceId: '',
+    binanceUid: '',
+    binancePayId: '',
     instructionsBn: '',
     instructionsEn: ''
+  });
+
+  // Add Plan Form State
+  const [showAddPlanForm, setShowAddPlanForm] = useState(false);
+  const [newPlanData, setNewPlanData] = useState({
+    id: '',
+    nameBn: '',
+    nameEn: '',
+    durationDays: 30,
+    maxBots: 3,
+    priceBdt: 200,
+    priceUsd: 2.0,
+    popular: false,
+    featuresBn: '২৪/৭ সার্বক্ষণিক লাইভ বট\nস্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট\nলাইভ কনসোল ও লগস',
+    featuresEn: '24/7 Priority Bot Uptime\nAuto Crash Recovery\nLive Console & Logs'
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +68,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const adminDirectUrl = `${window.location.origin}/?admin=true`;
 
   useEffect(() => {
     if (isOpen) {
@@ -96,6 +117,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const bData = await bRes.json();
         setAllBots(bData.bots || []);
       }
+
+      // 6. Hosting Plans
+      const plRes = await fetch('/api/plans');
+      if (plRes.ok) {
+        const plData = await plRes.json();
+        setPlans(plData.plans || []);
+      }
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message || 'Error loading admin data' });
     } finally {
@@ -126,7 +154,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Approval failed');
       }
-      setNotification({ type: 'success', message: 'প্লান সফলভাবে অনুমোদন করা হয়েছে (Plan approved successfully)!' });
+      setNotification({
+        type: 'success',
+        message: 'অনুরোধ সফলভাবে অনুমোদন করা হয়েছে (Approved successfully) এবং ইউজারের একাউন্টে ব্যালেন্স/প্ল্যান যুক্ত হয়েছে!'
+      });
       loadAllAdminData();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
@@ -154,7 +185,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Rejection failed');
       }
-      setNotification({ type: 'success', message: 'অনুরোধ বাতিল করা হয়েছে (Request rejected)' });
+      setNotification({ type: 'success', message: 'অনুরোধ বাতিল করা হয়েছে (Request rejected).' });
       loadAllAdminData();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
@@ -177,8 +208,94 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         body: JSON.stringify(paymentSettings)
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
-      setNotification({ type: 'success', message: 'পেমেন্ট নাম্বার ও সেটিংস সফলভাবে আপডেট করা হয়েছে!' });
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save settings');
+      setNotification({ type: 'success', message: 'পেমেন্ট সেটিংস সফলভাবে সংরক্ষিত হয়েছে!' });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSavePlans = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoadingId('save_plans');
+    const token = localStorage.getItem('bot_auth_token');
+    try {
+      const res = await fetch('/api/admin/plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ plans })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save plans');
+      setNotification({ type: 'success', message: 'প্লান ও প্রাইসিং সফলভাবে সংরক্ষিত হয়েছে!' });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleAddNewPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoadingId('add_new_plan');
+    const token = localStorage.getItem('bot_auth_token');
+    try {
+      const res = await fetch('/api/admin/plans/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(newPlanData)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'প্যাকেজ যোগ করতে ব্যর্থ');
+      
+      setNotification({ type: 'success', message: '🎉 নতুন হোস্টিং প্যাকেজ সফলভাবে যোগ করা হয়েছে!' });
+      setShowAddPlanForm(false);
+      setNewPlanData({
+        id: '',
+        nameBn: '',
+        nameEn: '',
+        durationDays: 30,
+        maxBots: 3,
+        priceBdt: 200,
+        priceUsd: 2.0,
+        popular: false,
+        featuresBn: '২৪/৭ সার্বক্ষণিক লাইভ বট\nস্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট\nলাইভ কনসোল ও লগস',
+        featuresEn: '24/7 Priority Bot Uptime\nAuto Crash Recovery\nLive Console & Logs'
+      });
+      loadAllAdminData();
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeletePlan = async (planId: string) => {
+    if (planId === 'free') {
+      alert('ফ্রি প্যাকেজ ডিলিট করা যাবে না।');
+      return;
+    }
+    if (!confirm(`আপনি কি নিশ্চিত যে এই প্যাকেজটি (${planId}) ডিলিট করতে চান?`)) return;
+
+    setActionLoadingId(`del_${planId}`);
+    const token = localStorage.getItem('bot_auth_token');
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'ডিলিট করতে ব্যর্থ');
+      setNotification({ type: 'success', message: 'প্যাকেজ ডিলিট করা হয়েছে।' });
+      loadAllAdminData();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
     } finally {
@@ -214,15 +331,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       r.userName?.toLowerCase().includes(q) ||
       r.userEmail?.toLowerCase().includes(q) ||
       r.senderNumber?.includes(q) ||
-      r.transactionId?.toLowerCase().includes(q)
+      r.transactionId?.toLowerCase().includes(q) ||
+      (r.type && r.type.includes(q))
     );
   });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#050811]/90 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-[#111927] border border-[#1f2c42] shadow-2xl rounded-3xl max-w-5xl w-full p-5 sm:p-7 text-white relative overflow-hidden max-h-[95vh] flex flex-col">
+        
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1f2c42] pb-4 mb-4">
+        <div className="flex items-center justify-between border-b border-[#1f2c42] pb-4 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-rose-400 flex items-center justify-center shadow-lg shadow-rose-500/10">
               <ShieldCheck className="w-6 h-6" />
@@ -236,8 +355,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </h3>
               <p className="text-xs text-slate-400">
                 {lang === 'bn'
-                  ? 'ইউজার প্লান অনুমোদন, পেমেন্ট নাম্বার পরিবর্তন ও সার্বিক বট নিয়ন্ত্রণ করুন'
-                  : 'Approve user plans, update payment settings, and control platform bots'}
+                  ? 'ডিপোজিট ও প্যাকেজ অনুমোদন, নতুন প্যাকেজ যোগ, পেমেন্ট সেটিংস ও ইউজার কন্ট্রোল'
+                  : 'Approve deposits, manage packages, update payment numbers and users'}
               </p>
             </div>
           </div>
@@ -249,9 +368,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </button>
         </div>
 
+        {/* Admin Direct URL Banner with 1-Click Copy */}
+        <div className="p-2.5 sm:p-3 rounded-2xl bg-[#09101d] border border-[#1e2d48] mb-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Link className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>
+              <strong className="text-white">এডমিন প্যানেল সরাসরি এক্সেস লিঙ্ক:</strong>{' '}
+              <span className="font-mono text-emerald-400 select-all">{adminDirectUrl}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleCopy(adminDirectUrl, 'admin_url')}
+            className="px-3 py-1 rounded-xl bg-[#16233b] hover:bg-[#0088cc]/30 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-[#223554]"
+          >
+            {copiedId === 'admin_url' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copiedId === 'admin_url' ? 'লিংক কপি হয়েছে!' : 'লিঙ্ক কপি করুন'}</span>
+          </button>
+        </div>
+
         {/* Overview Stats Bar */}
         {overview && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-3.5">
             <div className="p-3 rounded-2xl bg-[#0d1524] border border-[#1f2d48]">
               <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? 'মোট ইউজার' : 'Total Users'}</p>
               <p className="text-base sm:text-lg font-black text-white mt-0.5">{overview.totalUsers}</p>
@@ -277,7 +415,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         {/* Notification Toast */}
         {notification && (
-          <div className={`p-3 rounded-xl mb-4 text-xs flex items-center justify-between gap-2 animate-in fade-in ${
+          <div className={`p-3 rounded-xl mb-3 text-xs flex items-center justify-between gap-2 animate-in fade-in ${
             notification.type === 'success' ? 'bg-emerald-950/60 border border-emerald-500/50 text-emerald-300' : 'bg-rose-950/60 border border-rose-500/50 text-rose-300'
           }`}>
             <span>{notification.message}</span>
@@ -287,8 +425,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1.5 border-b border-[#1f2d48] pb-2 mb-4 overflow-x-auto">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 border-b border-[#1f2c42] pb-3 mb-4 overflow-x-auto text-xs">
           <button
             onClick={() => setActiveTab('requests')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
@@ -298,9 +436,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>{lang === 'bn' ? 'পেলান রিকোয়েস্ট ও অনুমোদন' : 'Plan Requests & Approval'}</span>
+            <span>{lang === 'bn' ? 'অনুরোধ ও ডিপোজিট' : 'Requests & Deposits'}</span>
             {overview && overview.pendingRequestsCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black flex items-center justify-center">
+              <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">
                 {overview.pendingRequestsCount}
               </span>
             )}
@@ -315,7 +453,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>{lang === 'bn' ? 'ইউজার ও সাবস্ক্রিপশন' : 'Users & Subscriptions'}</span>
+            <span>{lang === 'bn' ? 'ইউজার ও ওয়ালেট' : 'Users & Wallets'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('pricing')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'pricing'
+                ? 'bg-[#0088cc] text-white shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? 'প্যাকেজ ও মূল্য নির্ধারণ' : 'Packages & Pricing'}</span>
           </button>
 
           <button
@@ -351,7 +501,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </button>
         </div>
 
-        {/* Tab 1: Plan Requests Queue */}
+        {/* Tab 1: Requests & Deposits Queue */}
         {activeTab === 'requests' && (
           <div className="overflow-y-auto space-y-3 pr-1">
             {/* Filter & Search */}
@@ -386,94 +536,108 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
             </div>
 
-            {/* Requests Table / Cards */}
+            {/* Requests Cards */}
             {filteredRequests.length === 0 ? (
               <div className="p-8 text-center bg-[#0d1524] border border-[#1f2d48] rounded-2xl">
                 <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                 <p className="text-xs text-slate-400">
-                  {lang === 'bn' ? 'কোনো অনুরোধ পাওয়া যায়নি।' : 'No plan requests found.'}
+                  {lang === 'bn' ? 'কোনো অনুরোধ পাওয়া যায়নি।' : 'No requests found.'}
                 </p>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {filteredRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="p-4 rounded-2xl bg-[#0d1524] border border-[#1f2d48] flex flex-wrap items-center justify-between gap-3 text-xs hover:border-slate-600 transition-colors"
-                  >
-                    <div className="space-y-1 max-w-md">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-white text-sm">{req.userName}</span>
-                        <span className="text-slate-400 text-[11px]">({req.userEmail})</span>
-                        <span className="px-2 py-0.5 rounded-md bg-[#0088cc]/20 text-[#0088cc] font-bold text-[11px]">
-                          {req.planName}
-                        </span>
-                        <span className="font-black text-emerald-400 text-[12px]">
-                          ৳{req.amount}
-                        </span>
+                {filteredRequests.map((req) => {
+                  const isDeposit = req.type === 'deposit';
+
+                  return (
+                    <div
+                      key={req.id}
+                      className="p-4 rounded-2xl bg-[#0d1524] border border-[#1f2d48] flex flex-wrap items-center justify-between gap-3 text-xs hover:border-slate-600 transition-colors"
+                    >
+                      <div className="space-y-1.5 max-w-md">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            isDeposit ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          }`}>
+                            {isDeposit ? '💰 ওয়ালেট ডিপোজিট' : '📦 প্যাকেজ সাবস্ক্রিপশন'}
+                          </span>
+                          <span className="font-bold text-white text-sm">{req.userName}</span>
+                          <span className="text-slate-400 text-[11px]">({req.userEmail})</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-[#0088cc]/20 text-[#0088cc] font-bold text-[11px]">
+                            {req.planName}
+                          </span>
+                          <span className="font-black text-emerald-400 text-sm">
+                            {req.currency === 'USD' ? `$${req.amount} USD` : `৳${req.amount} BDT`}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 uppercase font-bold text-[10px]">
+                            {req.method}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-300 flex-wrap">
+                          <span>প্রেরক: <strong className="font-mono text-white">{req.senderNumber || req.senderIdentifier}</strong></span>
+                          <span className="flex items-center gap-1">
+                            TrxID: <strong className="font-mono text-pink-400">{req.transactionId}</strong>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(req.transactionId, req.id)}
+                              className="p-1 hover:text-white cursor-pointer"
+                            >
+                              {copiedId === req.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </span>
+                        </div>
+
+                        <div className="text-[10px] text-slate-500">
+                          তারিখ: {new Date(req.createdAt).toLocaleString('bn-BD')} {req.note ? `• নোট: ${req.note}` : ''}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-[11px] text-slate-300 flex-wrap">
-                        <span>মেথড: <strong className="uppercase text-amber-300">{req.method}</strong></span>
-                        <span>প্রেরক: <strong className="font-mono">{req.senderNumber}</strong></span>
-                        <span className="flex items-center gap-1">
-                          TrxID: <strong className="font-mono text-pink-400">{req.transactionId}</strong>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(req.transactionId, req.id)}
-                            className="p-1 hover:text-white cursor-pointer"
-                          >
-                            {copiedId === req.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          </button>
-                        </span>
-                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        {req.status === 'pending' ? (
+                          <>
+                            <button
+                              onClick={() => handleApproveRequest(req.id)}
+                              disabled={actionLoadingId === req.id}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer disabled:opacity-50 transition-all"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>{isDeposit ? (lang === 'bn' ? 'ডিপোজিট অনুমোদন করুন' : 'Approve Deposit') : (lang === 'bn' ? 'প্লান অনুমোদন করুন' : 'Approve Plan')}</span>
+                            </button>
 
-                      <div className="text-[10px] text-slate-500">
-                        তারিখ: {new Date(req.createdAt).toLocaleString()} {req.note ? `• নোট: ${req.note}` : ''}
+                            <button
+                              onClick={() => handleRejectRequest(req.id)}
+                              disabled={actionLoadingId === req.id}
+                              className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-all"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>{lang === 'bn' ? 'বাতিল' : 'Reject'}</span>
+                            </button>
+                          </>
+                        ) : req.status === 'approved' ? (
+                          <div className="px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>{lang === 'bn' ? 'অনুমোদিত (Approved)' : 'Approved'}</span>
+                          </div>
+                        ) : (
+                          <div className="px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-400 text-xs font-semibold">
+                            {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      {req.status === 'pending' ? (
-                        <>
-                          <button
-                            onClick={() => handleApproveRequest(req.id)}
-                            disabled={actionLoadingId === req.id}
-                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer disabled:opacity-50 transition-all"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{lang === 'bn' ? 'অনুমোদন (Approve)' : 'Approve'}</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleRejectRequest(req.id)}
-                            disabled={actionLoadingId === req.id}
-                            className="px-3 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-all"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>{lang === 'bn' ? 'বাতিল' : 'Reject'}</span>
-                          </button>
-                        </>
-                      ) : req.status === 'approved' ? (
-                        <div className="px-3 py-1 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-400 text-xs font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>{lang === 'bn' ? 'অনুমোদিত (Approved)' : 'Approved'}</span>
-                        </div>
-                      ) : (
-                        <div className="px-3 py-1 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-400 text-xs font-semibold">
-                          {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
-        {/* Tab 2: Users Management */}
+        {/* Tab 2: Users & Wallets */}
         {activeTab === 'users' && (
           <div className="overflow-y-auto space-y-2.5 pr-1">
             {users.map((u) => (
@@ -481,8 +645,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 key={u.id}
                 className="p-3.5 rounded-2xl bg-[#0d1524] border border-[#1f2d48] flex flex-wrap items-center justify-between gap-3 text-xs"
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white text-sm">{u.name}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                       u.role === 'admin' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400'
@@ -494,12 +658,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </span>
                   </div>
                   <p className="text-slate-400 text-xs">{u.email}</p>
+                  
+                  {/* Balance Display */}
+                  <div className="flex items-center gap-2 text-xs flex-wrap pt-0.5">
+                    <span className="text-slate-400">ওয়ালেট ব্যালেন্স:</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                      ৳{u.balanceBdt || 0} BDT
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                      ${u.balanceUsd || 0} USD
+                    </span>
+                  </div>
+
                   <p className="text-[11px] text-slate-500">
                     বট সংখ্যা: <strong className="text-white">{u.botsCount || 0}</strong> • সীমা: <strong className="text-[#0088cc]">{u.maxBots || 1}টি</strong> • মেয়াদ: {u.expiresAtFormatted}
                   </p>
                 </div>
 
-                {/* Quick upgrade buttons */}
+                {/* Actions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => handleUserPlanUpdate(u.id, '1_month', 30, 3, u.role)}
@@ -527,7 +703,287 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
 
-        {/* Tab 3: Payment Settings */}
+        {/* Tab 3: Packages & Pricing */}
+        {activeTab === 'pricing' && (
+          <div className="overflow-y-auto space-y-4 pr-1">
+            {/* Header with Add Plan Button */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h4 className="font-extrabold text-sm text-white">
+                    {lang === 'bn' ? 'প্যাকেজ ও প্রাইসিং কনফিগারেশন' : 'Packages & Pricing Management'}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {lang === 'bn'
+                      ? 'নতুন হোস্টিং প্যাকেজ যোগ করুন বা বিদ্যমান প্যাকেজের মূল্য ও বট লিমিট পরিবর্তন করুন।'
+                      : 'Add new hosting plans or adjust prices and bot limits for existing ones.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddPlanForm(!showAddPlanForm)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{showAddPlanForm ? 'ফর্ম বন্ধ করুন' : '+ নতুন প্যাকেজ যোগ করুন'}</span>
+              </button>
+            </div>
+
+            {/* Expandable Add Plan Form */}
+            {showAddPlanForm && (
+              <form onSubmit={handleAddNewPlan} className="p-4 rounded-2xl bg-[#090f1a] border border-emerald-500/40 space-y-3.5 text-xs animate-in zoom-in-95">
+                <div className="flex items-center justify-between border-b border-[#1f2d48] pb-2">
+                  <span className="font-black text-emerald-400 text-xs uppercase tracking-wider">
+                    নতুন প্যাকেজের তথ্য দিন (Add New Hosting Package)
+                  </span>
+                  <button type="button" onClick={() => setShowAddPlanForm(false)} className="text-slate-400 hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">প্যাকেজ আইডি (Unique ID):</label>
+                    <input
+                      type="text"
+                      value={newPlanData.id}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, id: e.target.value })}
+                      placeholder="e.g. 2_months_special"
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">নাম (বাংলা):</label>
+                    <input
+                      type="text"
+                      value={newPlanData.nameBn}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, nameBn: e.target.value })}
+                      placeholder="e.g. ২ মাস স্পেশাল"
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">নাম (English):</label>
+                    <input
+                      type="text"
+                      value={newPlanData.nameEn}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, nameEn: e.target.value })}
+                      placeholder="e.g. 2 Months Special"
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-bold text-emerald-400 mb-1">মূল্য (৳ BDT):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newPlanData.priceBdt}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, priceBdt: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-[#0d1627] border border-emerald-500/40 rounded-xl p-2 text-xs text-white font-bold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-amber-400 mb-1">মূল্য ($ USD):</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={newPlanData.priceUsd}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, priceUsd: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-[#0d1627] border border-amber-500/40 rounded-xl p-2 text-xs text-white font-bold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">মেয়াদ (দিন):</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={newPlanData.durationDays}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, durationDays: parseInt(e.target.value, 10) || 30 })}
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">বট সীমা (Max Bots):</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={newPlanData.maxBots}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, maxBots: parseInt(e.target.value, 10) || 1 })}
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">সুবিধাসমূহ (বাংলা - প্রতি লাইনে একটি):</label>
+                    <textarea
+                      rows={2}
+                      value={newPlanData.featuresBn}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, featuresBn: e.target.value })}
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Features (English - one per line):</label>
+                    <textarea
+                      rows={2}
+                      value={newPlanData.featuresEn}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, featuresEn: e.target.value })}
+                      className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={newPlanData.popular}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, popular: e.target.checked })}
+                      className="rounded text-pink-500"
+                    />
+                    <span>⭐ পপুলার বা বেস্ট চয়েস ব্যাজ দেখান</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={actionLoadingId === 'add_new_plan'}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {actionLoadingId === 'add_new_plan' ? 'যুক্ত হচ্ছে...' : 'প্যাকেজ সেভ করুন'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Existing Plans Form Grid */}
+            <form onSubmit={handleSavePlans} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {plans.map((p, idx) => (
+                  <div key={p.id} className="p-4 rounded-2xl bg-[#0d1524] border border-[#1f2d48] space-y-3 relative">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-sm text-white">{p.nameBn} ({p.nameEn})</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-[#0088cc]/20 text-[#0088cc] border border-[#0088cc]/30">
+                          {p.id}
+                        </span>
+                        {p.id !== 'free' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePlan(p.id)}
+                            className="p-1 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
+                            title="Delete Plan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 text-xs">
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-400 mb-1">
+                          মূল্য ($ USD):
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={p.priceUsd}
+                          onChange={(e) => {
+                            const updated = [...plans];
+                            updated[idx] = { ...updated[idx], priceUsd: parseFloat(e.target.value) || 0 };
+                            setPlans(updated);
+                          }}
+                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-amber-400 rounded-xl p-2 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-emerald-400 mb-1">
+                          মূল্য (৳ BDT):
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={p.priceBdt}
+                          onChange={(e) => {
+                            const updated = [...plans];
+                            updated[idx] = { ...updated[idx], priceBdt: parseInt(e.target.value, 10) || 0 };
+                            setPlans(updated);
+                          }}
+                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-emerald-400 rounded-xl p-2 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                          সর্বোচ্চ বট (Max Bots):
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={p.maxBots}
+                          onChange={(e) => {
+                            const updated = [...plans];
+                            updated[idx] = { ...updated[idx], maxBots: parseInt(e.target.value, 10) || 1 };
+                            setPlans(updated);
+                          }}
+                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl p-2 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                          মেয়াদ (Days):
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={p.durationDays}
+                          onChange={(e) => {
+                            const updated = [...plans];
+                            updated[idx] = { ...updated[idx], durationDays: parseInt(e.target.value, 10) || 1 };
+                            setPlans(updated);
+                          }}
+                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl p-2 text-xs text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={actionLoadingId === 'save_plans'}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-slate-950 font-black text-xs shadow-md cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {actionLoadingId === 'save_plans' ? 'সংরক্ষণ হচ্ছে...' : 'প্ল্যান ও প্রাইসিং সংরক্ষণ করুন'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Tab 4: Payment Settings */}
         {activeTab === 'payments' && (
           <form onSubmit={handleSavePaymentSettings} className="overflow-y-auto space-y-4 pr-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -582,6 +1038,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#0088cc]"
                 />
               </div>
+
+              <div>
+                <label className="block font-bold text-amber-400 mb-1">
+                  Binance UID (বাইন্যান্স ইউজার আইডি):
+                </label>
+                <input
+                  type="text"
+                  value={paymentSettings.binanceUid || ''}
+                  onChange={(e) => setPaymentSettings({ ...paymentSettings, binanceUid: e.target.value })}
+                  placeholder="849201948 (Personal Binance UID)"
+                  className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-amber-400 mb-1">
+                  Binance Pay ID (বাইন্যান্স পে আইডি):
+                </label>
+                <input
+                  type="text"
+                  value={paymentSettings.binancePayId || ''}
+                  onChange={(e) => setPaymentSettings({ ...paymentSettings, binancePayId: e.target.value })}
+                  placeholder="849201948 (Binance Pay ID)"
+                  className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
             </div>
 
             <div>
@@ -608,7 +1090,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </form>
         )}
 
-        {/* Tab 4: All Bots Control */}
+        {/* Tab 5: All Bots Control */}
         {activeTab === 'bots' && (
           <div className="overflow-y-auto space-y-2.5 pr-1">
             {allBots.map((bot) => (
@@ -682,6 +1164,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ))}
           </div>
         )}
+
       </div>
     </div>
   );

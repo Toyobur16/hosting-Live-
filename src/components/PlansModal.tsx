@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, ShieldCheck, Sparkles, Crown, Zap, Clock, CreditCard, Send, CheckCircle2, AlertCircle, Copy, HelpCircle } from 'lucide-react';
+import {
+  X, Check, ShieldCheck, Sparkles, Crown, Zap, Clock, CreditCard,
+  Send, CheckCircle2, AlertCircle, Copy, HelpCircle, Wallet,
+  ArrowRight, PlusCircle, RefreshCw, AlertTriangle, ArrowUpRight
+} from 'lucide-react';
 import { HostingPlan, PaymentSettings, AuthUser, PlanRequest } from '../types';
 
 interface PlansModalProps {
@@ -8,6 +12,7 @@ interface PlansModalProps {
   user: AuthUser | null;
   onOpenAuthModal: () => void;
   lang: 'bn' | 'en';
+  onUserUpdated?: (updatedUser: AuthUser) => void;
 }
 
 export const PlansModal: React.FC<PlansModalProps> = ({
@@ -15,38 +20,92 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   onClose,
   user,
   onOpenAuthModal,
-  lang
+  lang,
+  onUserUpdated
 }) => {
   const [plans, setPlans] = useState<HostingPlan[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('1_month');
-  const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'rocket' | 'binance'>('bkash');
-  const [senderNumber, setSenderNumber] = useState('');
-  const [transactionId, setTransactionId] = useState('');
-  const [note, setNote] = useState('');
+  const [activeView, setActiveView] = useState<'plans' | 'deposit' | 'history'>('plans');
+
+  // Deposit Form State
+  const [depositMethod, setDepositMethod] = useState<'binance' | 'bkash' | 'nagad' | 'rocket'>('binance');
+  const [depositCurrency, setDepositCurrency] = useState<'USD' | 'BDT'>('USD');
+  const [depositAmount, setDepositAmount] = useState<string>('5');
+  const [senderIdentifier, setSenderIdentifier] = useState('');
+  const [depositTrxId, setDepositTrxId] = useState('');
+  const [depositNote, setDepositNote] = useState('');
+
+  // Buy Flow State
+  const [buyingPlan, setBuyingPlan] = useState<HostingPlan | null>(null);
+  const [buyCurrency, setBuyCurrency] = useState<'USD' | 'BDT'>('USD');
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
+  const [buySuccess, setBuySuccess] = useState<string | null>(null);
+
+  // Common State
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successRequest, setSuccessRequest] = useState<PlanRequest | null>(null);
-  const [existingRequest, setExistingRequest] = useState<PlanRequest | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [allRequests, setAllRequests] = useState<PlanRequest[]>([]);
+  const [latestRequest, setLatestRequest] = useState<PlanRequest | null>(null);
+
+  // Current balance state (synced with user and backend)
+  const [balanceBdt, setBalanceBdt] = useState<number>(user?.balanceBdt || 0);
+  const [balanceUsd, setBalanceUsd] = useState<number>(user?.balanceUsd || 0);
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
-      setSuccessRequest(null);
+      setSuccessMsg(null);
+      setBuyError(null);
+      setBuySuccess(null);
       fetchPlans();
       fetchPaymentSettings();
       if (user) {
-        fetchUserPlanStatus();
+        fetchUserStatus();
       }
     }
   }, [isOpen, user]);
+
+  useEffect(() => {
+    if (user) {
+      setBalanceBdt(user.balanceBdt || 0);
+      setBalanceUsd(user.balanceUsd || 0);
+    }
+  }, [user]);
+
+  // Adjust currency default when deposit method changes
+  useEffect(() => {
+    if (depositMethod === 'binance') {
+      setDepositCurrency('USD');
+      if (!depositAmount || depositAmount === '150') setDepositAmount('5');
+    } else {
+      setDepositCurrency('BDT');
+      if (!depositAmount || depositAmount === '5') setDepositAmount('150');
+    }
+  }, [depositMethod]);
 
   const fetchPlans = async () => {
     try {
       const res = await fetch('/api/plans');
       const data = await res.json();
-      if (data.plans) setPlans(data.plans);
+      if (data.plans && Array.isArray(data.plans)) {
+        // Sort plans in order: free -> 1_month -> 3_months -> 6_months -> 1_year -> custom
+        const orderMap: { [key: string]: number } = {
+          free: 0,
+          '1_month': 1,
+          '3_months': 2,
+          '6_months': 3,
+          '1_year': 4
+        };
+        const sorted = [...data.plans].sort((a, b) => {
+          const ordA = orderMap[a.id] !== undefined ? orderMap[a.id] : (a.durationDays || 50);
+          const ordB = orderMap[b.id] !== undefined ? orderMap[b.id] : (b.durationDays || 50);
+          return ordA - ordB;
+        });
+        setPlans(sorted);
+      }
     } catch {}
   };
 
@@ -58,7 +117,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
     } catch {}
   };
 
-  const fetchUserPlanStatus = async () => {
+  const fetchUserStatus = async () => {
     const token = localStorage.getItem('bot_auth_token');
     if (!token) return;
     try {
@@ -66,11 +125,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.latestRequest && data.latestRequest.status === 'pending') {
-        setExistingRequest(data.latestRequest);
-      } else {
-        setExistingRequest(null);
-      }
+      if (data.allRequests) setAllRequests(data.allRequests);
+      if (data.latestRequest) setLatestRequest(data.latestRequest);
+      if (typeof data.balanceBdt === 'number') setBalanceBdt(data.balanceBdt);
+      if (typeof data.balanceUsd === 'number') setBalanceUsd(data.balanceUsd);
     } catch {}
   };
 
@@ -82,372 +140,876 @@ export const PlansModal: React.FC<PlansModalProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleSubmitPurchase = async (e: React.FormEvent) => {
+  const handleStartDepositForPlan = (plan: HostingPlan) => {
+    setBuyingPlan(null);
+    setActiveView('deposit');
+    if (depositMethod === 'binance') {
+      setDepositCurrency('USD');
+      setDepositAmount((plan.priceUsd || 5).toString());
+    } else {
+      setDepositCurrency('BDT');
+      setDepositAmount((plan.priceBdt || 150).toString());
+    }
+  };
+
+  const handleSubmitDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       onOpenAuthModal();
       return;
     }
 
-    if (!senderNumber.trim()) {
-      setError(lang === 'bn' ? 'প্রেরক ফোন নাম্বার প্রদান করুন' : 'Sender phone number is required');
+    const amountNum = parseFloat(depositAmount);
+    if (!amountNum || amountNum <= 0) {
+      setError(lang === 'bn' ? 'সঠিক জমার পরিমাণ (Amount) লিখুন' : 'Enter a valid amount');
       return;
     }
-    if (!transactionId.trim()) {
-      setError(lang === 'bn' ? 'Transaction ID (TrxID) প্রদান করুন' : 'Transaction ID is required');
+
+    if (!senderIdentifier.trim()) {
+      setError(lang === 'bn' ? 'প্রেরক ফোন নাম্বার বা Binance UID প্রদান করুন' : 'Sender phone number or Binance UID is required');
+      return;
+    }
+
+    if (!depositTrxId.trim()) {
+      setError(lang === 'bn' ? 'Transaction ID (TrxID) প্রদান করুন' : 'Transaction ID (TrxID) is required');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
 
     try {
       const token = localStorage.getItem('bot_auth_token');
-      const res = await fetch('/api/plans/purchase', {
+      const res = await fetch('/api/wallet/deposit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          planId: selectedPlanId,
-          method: paymentMethod,
-          senderNumber: senderNumber.trim(),
-          transactionId: transactionId.trim(),
-          note: note.trim()
+          amount: amountNum,
+          currency: depositCurrency,
+          method: depositMethod,
+          senderIdentifier: senderIdentifier.trim(),
+          transactionId: depositTrxId.trim(),
+          note: depositNote.trim()
         })
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'অনুরোধ ব্যর্থ হয়েছে');
+        throw new Error(data.error || 'ডিপোজিট সাবমিট ব্যর্থ হয়েছে');
       }
 
-      setSuccessRequest(data.request);
-      setExistingRequest(data.request);
+      setSuccessMsg(data.message || 'আপনার ডিপোজিট রিকোয়েস্ট সফলভাবে জমা হয়েছে। এডমিন অনুমোদন করলেই ব্যালেন্স যোগ হবে।');
+      setSenderIdentifier('');
+      setDepositTrxId('');
+      setDepositNote('');
+      fetchUserStatus();
     } catch (err: any) {
-      setError(err.message || 'Error submitting purchase request');
+      setError(err.message || 'ডিপোজিট রিকোয়েস্ট পাঠানো যায়নি');
     } finally {
       setLoading(false);
     }
   };
 
-  const currentSelectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[1];
+  const handleBuyWithWallet = async () => {
+    if (!user) {
+      onOpenAuthModal();
+      return;
+    }
+    if (!buyingPlan) return;
 
-  const getMethodDetails = () => {
-    if (!paymentSettings) return { number: '01711223344', title: 'bKash Send Money' };
-    switch (paymentMethod) {
-      case 'nagad':
-        return { number: paymentSettings.nagadNumber, title: 'Nagad Personal (Send Money)' };
-      case 'rocket':
-        return { number: paymentSettings.rocketNumber, title: 'Rocket Personal (Send Money)' };
-      case 'binance':
-        return { number: paymentSettings.binanceId, title: 'Binance USDT (TRC20)' };
-      case 'bkash':
-      default:
-        return { number: paymentSettings.bkashNumber, title: 'bKash Personal (Send Money)' };
+    setBuyLoading(true);
+    setBuyError(null);
+    setBuySuccess(null);
+
+    try {
+      const token = localStorage.getItem('bot_auth_token');
+      const res = await fetch('/api/plans/buy-with-wallet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          planId: buyingPlan.id,
+          currency: buyCurrency
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'প্যাকেজ কেনা সম্পন্ন হয়নি');
+      }
+
+      setBuySuccess(data.message || 'প্যাকেজ সফলভাবে ক্রয় করা হয়েছে!');
+      if (data.user) {
+        setBalanceBdt(data.user.balanceBdt || 0);
+        setBalanceUsd(data.user.balanceUsd || 0);
+        if (onUserUpdated) onUserUpdated(data.user);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      }
+      fetchUserStatus();
+      setTimeout(() => {
+        setBuyingPlan(null);
+        setBuySuccess(null);
+      }, 2500);
+    } catch (err: any) {
+      setBuyError(err.message || 'ব্যালেন্স দিয়ে প্যাকেজ কেনা সম্ভব হয়নি');
+    } finally {
+      setBuyLoading(false);
     }
   };
 
-  const methodInfo = getMethodDetails();
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#050811]/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-[#111927] border border-[#1f2c42] shadow-2xl rounded-3xl max-w-4xl w-full p-5 sm:p-7 text-white relative overflow-hidden max-h-[95vh] flex flex-col">
-        {/* Header */}
+      <div className="bg-[#111927] border border-[#1f2c42] shadow-2xl rounded-3xl max-w-5xl w-full p-4 sm:p-6 text-white relative overflow-hidden max-h-[95vh] flex flex-col">
+        
+        {/* Header Bar */}
         <div className="flex items-center justify-between border-b border-[#1f2c42] pb-4 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
-              <Crown className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
+              <Crown className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <span>{lang === 'bn' ? 'হোস্টিং প্লান ও সাবস্ক্রিপশন' : 'Hosting Plans & Subscriptions'}</span>
-                <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-[#0088cc]/15 text-[#0088cc] border border-[#0088cc]/30">
-                  {lang === 'bn' ? '১ মাস থেকে ১ বছর' : '1 Month to 1 Year'}
+                <span>{lang === 'bn' ? 'হোস্টিং প্যাকেজ ও ওয়ালেট' : 'Hosting Packages & Wallet'}</span>
+                <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  {lang === 'bn' ? 'ডিপোজিট করুন ও কিনুন' : 'Deposit & Buy'}
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
                 {lang === 'bn'
-                  ? 'নতুন ইউজারের জন্য ১টি বট সম্পূর্ণ ফ্রি! অতিরিক্ত ও সার্বক্ষণিক লাইভ হোস্টিংয়ের জন্য প্লান কিনুন।'
-                  : '1 Bot is 100% Free for new users. Purchase a plan for extra bots & priority live hosting.'}
+                  ? 'প্রথমে ওয়ালেটে ব্যালেন্স এড করুন, তারপর পছন্দের প্যাকেজে "বাই নাও" ক্লিক করে চালু করুন।'
+                  : 'Add balance to your wallet first, then click "Buy Now" on your desired plan.'}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-y-auto space-y-6 pr-1">
-          {/* User Status Bar */}
-          {user && (
-            <div className="p-3.5 rounded-2xl bg-[#0d1524] border border-[#1f2d48] flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <p className="font-bold text-white">{user.name} ({user.email})</p>
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <span>{lang === 'bn' ? 'বর্তমান প্লান:' : 'Current Plan:'}</span>
-                    <span className="text-emerald-400 font-bold uppercase">{user.plan || 'Free Starter'}</span>
-                    <span>• {lang === 'bn' ? `সর্বোচ্চ বট: ${user.maxBots || 1}টি` : `Max Bots: ${user.maxBots || 1}`}</span>
-                    {user.planExpiresAt && (
-                      <span>• {lang === 'bn' ? `মেয়াদ: ${new Date(user.planExpiresAt).toLocaleDateString()}` : `Expires: ${new Date(user.planExpiresAt).toLocaleDateString()}`}</span>
-                    )}
-                  </p>
-                </div>
+        {/* Wallet & Navigation Tabs Banner */}
+        <div className="bg-[#0b1220] border border-[#1f2d48] rounded-2xl p-3.5 sm:p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+          {/* User & Balance Display */}
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-black">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-400 font-semibold">{lang === 'bn' ? 'আপনার ওয়ালেট ব্যালেন্স:' : 'Wallet Balance:'}</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-black text-xs border border-emerald-500/40">
+                  ৳{balanceBdt.toFixed(2)} BDT
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black text-xs border border-amber-500/40">
+                  ${balanceUsd.toFixed(2)} USD
+                </span>
               </div>
-
-              {existingRequest && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold text-[11px] animate-pulse">
-                  <Clock className="w-3.5 h-3.5" />
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {user ? (
                   <span>
-                    {lang === 'bn'
-                      ? '⏳ আপনার ১টি প্লান রিকোয়েস্ট এডমিন অনুমোদনের অপেক্ষায় আছে'
-                      : '⏳ Your plan request is pending admin approval'}
+                    {user.name} • {lang === 'bn' ? 'প্লান:' : 'Plan:'}{' '}
+                    <strong className="text-emerald-400 uppercase">{user.plan || 'Free'}</strong>
+                    {user.planExpiresAt && ` (মেয়াদ: ${new Date(user.planExpiresAt).toLocaleDateString('bn-BD')})`}
                   </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Success Banner */}
-          {successRequest && (
-            <div className="p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-xs space-y-2 animate-in zoom-in-95">
-              <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                <span>{lang === 'bn' ? 'আপনার প্লান রিকোয়েস্ট সফলভাবে জমা হয়েছে!' : 'Plan Request Submitted Successfully!'}</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">
-                {lang === 'bn'
-                  ? `প্লান: ${successRequest.planName} (৳${successRequest.amount}), TrxID: ${successRequest.transactionId}। এডমিন প্যানেল থেকে ভেরিফাই করে অনুমোদন (Approve) করলেই আপনার একাউন্টে তৎক্ষণাৎ বট হোস্টিংয়ের অনুমতি কার্যকর হবে।`
-                  : `Plan: ${successRequest.planName} (৳${successRequest.amount}), TrxID: ${successRequest.transactionId}. Once reviewed and approved in admin panel, your live hosting limit will be unlocked immediately.`}
+                ) : (
+                  <span className="text-amber-400 font-medium">ডিপোজিট বা প্যাকেজ কিনতে প্রথমে লগইন করুন</span>
+                )}
               </p>
-            </div>
-          )}
-
-          {/* Plans Grid */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-              {lang === 'bn' ? '১. হোস্টিং প্লান নির্বাচন করুন' : '1. Choose Your Hosting Plan'}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {plans.filter(p => p.id !== 'free').map((p) => {
-                const isSelected = selectedPlanId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelectedPlanId(p.id)}
-                    className={`relative rounded-2xl p-4 cursor-pointer transition-all border flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-gradient-to-b from-[#16233b] to-[#0e1726] border-[#0088cc] shadow-lg shadow-[#0088cc]/10 ring-2 ring-[#0088cc]/40'
-                        : 'bg-[#0d1524] border-[#1f2d48] hover:border-slate-600 hover:bg-[#111c2e]'
-                    }`}
-                  >
-                    {p.popular && (
-                      <span className="absolute -top-2.5 right-4 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-md">
-                        {lang === 'bn' ? 'বেস্ট চয়েস' : 'Popular'}
-                      </span>
-                    )}
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-bold text-sm text-white">{lang === 'bn' ? p.nameBn : p.nameEn}</h5>
-                        {isSelected ? (
-                          <div className="w-5 h-5 rounded-full bg-[#0088cc] text-white flex items-center justify-center">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full border border-slate-600" />
-                        )}
-                      </div>
-
-                      <div className="mb-3">
-                        <span className="text-2xl font-black text-white">৳{p.priceBdt}</span>
-                        <span className="text-xs text-slate-400 ml-1.5 font-medium">
-                          / {p.durationDays} {lang === 'bn' ? 'দিন' : 'Days'}
-                        </span>
-                      </div>
-
-                      <div className="p-2 rounded-xl bg-[#090f1a] border border-[#1a2538] mb-3 text-[11px]">
-                        <span className="text-[#0088cc] font-bold">{p.maxBots === 999 ? 'আনলিমিটেড' : p.maxBots}টি</span>{' '}
-                        <span className="text-slate-300">{lang === 'bn' ? 'টেলিগ্রাম বট হোস্টিং' : 'Telegram Bots'}</span>
-                      </div>
-
-                      <ul className="space-y-1.5 text-[11px] text-slate-300">
-                        {(lang === 'bn' ? p.featuresBn : p.featuresEn).map((feat, idx) => (
-                          <li key={idx} className="flex items-start gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                            <span className="leading-tight">{feat}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
 
-          {/* Payment & Checkout Box */}
-          <div className="bg-[#0b1220] border border-[#1f2d48] rounded-2xl p-5 space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-[#0088cc]" />
-              <span>{lang === 'bn' ? '২. পেমেন্ট করুন ও TrxID প্রদান করুন' : '2. Send Payment & Enter TrxID'}</span>
-            </h4>
+          {/* Action Navigation Tabs */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveView('plans')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'plans'
+                  ? 'bg-[#0088cc] text-white shadow-md shadow-[#0088cc]/20'
+                  : 'bg-[#131f33] text-slate-300 hover:text-white hover:bg-[#1a2942]'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'সব প্যাকেজ' : 'All Plans'}</span>
+            </button>
 
-            {/* Payment Method Selector */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('bkash')}
-                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                  paymentMethod === 'bkash'
-                    ? 'bg-[#e2136e]/15 border-[#e2136e] text-[#e2136e]'
-                    : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                }`}
-              >
-                <span>bKash (বিকাশ)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('nagad')}
-                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                  paymentMethod === 'nagad'
-                    ? 'bg-[#f7941d]/15 border-[#f7941d] text-[#f7941d]'
-                    : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                }`}
-              >
-                <span>Nagad (নগদ)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('rocket')}
-                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                  paymentMethod === 'rocket'
-                    ? 'bg-[#8c3494]/15 border-[#8c3494] text-[#a445ad]'
-                    : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                }`}
-              >
-                <span>Rocket (রকেট)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('binance')}
-                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                  paymentMethod === 'binance'
-                    ? 'bg-[#f3ba2f]/15 border-[#f3ba2f] text-[#f3ba2f]'
-                    : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                }`}
-              >
-                <span>USDT (Binance)</span>
-              </button>
+            <button
+              onClick={() => setActiveView('deposit')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'deposit'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                  : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/60'
+              }`}
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>{lang === 'bn' ? 'ডিপোজিট করুন' : 'Deposit Money'}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('history')}
+              className={`px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'history'
+                  ? 'bg-[#1e2d48] text-white'
+                  : 'bg-[#131f33] text-slate-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'লেনদেন হিস্টোরি' : 'History'}</span>
+              {allRequests.filter((r) => r.status === 'pending').length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="overflow-y-auto space-y-6 pr-1 flex-1">
+          
+          {/* VIEW 1: SERIALIZED PLANS LIST (Free -> 1 Month -> 3 Months -> 6 Months -> 1 Year) */}
+          {activeView === 'plans' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span>{lang === 'bn' ? 'হোস্টিং প্যাকেজসমূহ (সিরিয়াল অনুযায়ী)' : 'Sequential Hosting Packages'}</span>
+                </h4>
+                <span className="text-[11px] text-slate-400">
+                  {lang === 'bn' ? 'প্যাকেজ বাছাই করে সরাসরি "বাই নাও" ক্লিক করুন' : 'Choose plan and click Buy Now'}
+                </span>
+              </div>
+
+              {/* Plans Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {plans.map((p, idx) => {
+                  const isFree = p.id === 'free';
+                  const isCurrent = user?.plan === p.id;
+                  const hasSufficientUsd = balanceUsd >= (p.priceUsd || 0);
+                  const hasSufficientBdt = balanceBdt >= (p.priceBdt || 0);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`relative rounded-2xl p-4 transition-all border flex flex-col justify-between ${
+                        p.popular
+                          ? 'bg-gradient-to-b from-[#16233b] to-[#0e1726] border-pink-500/50 shadow-lg shadow-pink-500/5 ring-1 ring-pink-500/30'
+                          : isCurrent
+                          ? 'bg-[#102035] border-emerald-500/50 shadow-md'
+                          : 'bg-[#0d1524] border-[#1f2d48] hover:border-slate-600 hover:bg-[#111c2e]'
+                      }`}
+                    >
+                      {p.popular && (
+                        <span className="absolute -top-2.5 right-4 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-md">
+                          {lang === 'bn' ? '⭐ বেস্ট চয়েস' : '⭐ Best Value'}
+                        </span>
+                      )}
+
+                      {isCurrent && (
+                        <span className="absolute -top-2.5 left-4 bg-emerald-600 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-md">
+                          {lang === 'bn' ? 'বর্তমান প্যাকেজ' : 'Current Active'}
+                        </span>
+                      )}
+
+                      <div>
+                        {/* Plan Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-extrabold text-base text-white">{lang === 'bn' ? p.nameBn : p.nameEn}</h5>
+                          <span className="text-[11px] text-slate-400 font-bold">
+                            #{idx + 1}
+                          </span>
+                        </div>
+
+                        {/* Price Display */}
+                        <div className="mb-3">
+                          {isFree ? (
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-2xl font-black text-emerald-400">৳০ / ফ্রি</span>
+                              <span className="text-xs text-slate-400 font-medium">লাইফটাইম</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="flex items-baseline gap-2 flex-wrap">
+                                <span className="text-2xl font-black text-white">৳{p.priceBdt} BDT</span>
+                                {p.priceUsd > 0 && (
+                                  <span className="text-xs font-black text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30">
+                                    ${p.priceUsd} USD
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-400 font-medium">
+                                {p.durationDays} {lang === 'bn' ? 'দিন সার্বক্ষণিক মেয়াদ' : 'Days Hosting'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bot Capacity Badge */}
+                        <div className="p-2.5 rounded-xl bg-[#090f1a] border border-[#1a2538] mb-3 text-xs flex items-center justify-between">
+                          <span className="text-slate-300">{lang === 'bn' ? 'হোস্টিং সক্ষমতা:' : 'Capacity:'}</span>
+                          <span className="text-[#0088cc] font-extrabold text-xs">
+                            {p.maxBots === 999 ? (lang === 'bn' ? 'আনলিমিটেড বট' : 'Unlimited Bots') : `${p.maxBots}টি সক্রিয় বট`}
+                          </span>
+                        </div>
+
+                        {/* Features */}
+                        <ul className="space-y-1.5 text-xs text-slate-300 mb-4">
+                          {(lang === 'bn' ? p.featuresBn : p.featuresEn).map((feat, fIdx) => (
+                            <li key={fIdx} className="flex items-start gap-2">
+                              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                              <span className="leading-snug text-[11px]">{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* BUY NOW BUTTON ON EVERY CARD */}
+                      <div className="pt-2 border-t border-[#1a2538]">
+                        {isFree ? (
+                          <div className="w-full py-2.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs text-center">
+                            {lang === 'bn' ? '✓ রেজিস্ট্রেশনে ডিফল্ট ফ্রি' : 'Included by Default'}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!user) {
+                                onOpenAuthModal();
+                                return;
+                              }
+                              setBuyingPlan(p);
+                              setBuyError(null);
+                              setBuySuccess(null);
+                              // Default to currency where user has balance
+                              if (balanceUsd >= (p.priceUsd || 0)) {
+                                setBuyCurrency('USD');
+                              } else {
+                                setBuyCurrency('BDT');
+                              }
+                            }}
+                            className={`w-full py-2.5 px-4 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md ${
+                              p.popular
+                                ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-500/20'
+                                : 'bg-[#0088cc] hover:bg-[#0077b5] text-white shadow-[#0088cc]/20'
+                            }`}
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>{lang === 'bn' ? 'বাই নাও (Buy Now)' : 'Buy Now'}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+          )}
 
-            {/* Payment Number & Instructions */}
-            <div className="p-3.5 rounded-xl bg-[#090f1a] border border-[#1a2538] flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div>
-                <p className="text-[11px] text-slate-400">{methodInfo.title}</p>
-                <p className="font-mono text-sm sm:text-base font-bold text-white mt-0.5 select-all">
-                  {methodInfo.number}
-                </p>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  {lang === 'bn' ? `প্লানের মূল্য: ৳${currentSelectedPlan.priceBdt} টাকা Send Money করুন` : `Send: ৳${currentSelectedPlan.priceBdt} BDT`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleCopy(methodInfo.number.split(' ')[0], 'method_num')}
-                className="px-3 py-1.5 rounded-xl bg-[#1e293b] hover:bg-[#334155] text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-[#334155] cursor-pointer transition-colors"
-              >
-                {copiedKey === 'method_num' ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{lang === 'bn' ? 'কপি হয়েছে' : 'Copied'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 text-[#0088cc]" />
-                    <span>{lang === 'bn' ? 'নাম্বার কপি করুন' : 'Copy Number'}</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Submission Form */}
-            <form onSubmit={handleSubmitPurchase} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    {lang === 'bn' ? 'আপনার প্রেরক ফোন নাম্বার (Sender Number) *' : 'Sender Phone Number *'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={senderNumber}
-                    onChange={(e) => setSenderNumber(e.target.value)}
-                    placeholder="e.g. 01712345678"
-                    className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl text-white placeholder-slate-500 py-2.5 px-3 text-xs focus:outline-none transition-all"
-                  />
+          {/* VIEW 2: DEPOSIT MONEY FORM */}
+          {activeView === 'deposit' && (
+            <div className="bg-[#0b1220] border border-[#1f2d48] rounded-2xl p-5 space-y-5">
+              <div className="flex items-center justify-between border-b border-[#1f2d48] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold">
+                    <PlusCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">
+                      {lang === 'bn' ? 'ওয়ালেটে ব্যালেন্স ডিপোজিট করুন' : 'Deposit Funds to Wallet'}
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      {lang === 'bn'
+                        ? 'Binance (USDT) বা বিকাশ, নগদ, রকেটে টাকা পাঠিয়ে TrxID সাবমিট করুন।'
+                        : 'Transfer money via Binance (USDT), bKash, Nagad or Rocket and submit TrxID.'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    {lang === 'bn' ? 'Transaction ID (TrxID) *' : 'Transaction ID (TrxID) *'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="e.g. 9J4K2L8M1N"
-                    className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl text-white placeholder-slate-500 py-2.5 px-3 text-xs font-mono focus:outline-none transition-all uppercase"
-                  />
-                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveView('plans')}
+                  className="text-xs text-[#0088cc] hover:underline flex items-center gap-1 cursor-pointer font-semibold"
+                >
+                  <span>{lang === 'bn' ? 'প্যাকেজে ফিরে যান' : 'Back to Plans'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  {lang === 'bn' ? 'অতিরিক্ত তথ্য বা নোট (ঐচ্ছিক)' : 'Additional Note (Optional)'}
-                </label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder={lang === 'bn' ? 'যেমন: রেফারেল বা বিকাশ রেফারেন্স' : 'e.g., bKash reference'}
-                  className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl text-white placeholder-slate-500 py-2 px-3 text-xs focus:outline-none transition-all"
-                />
-              </div>
+              {/* Status messages */}
+              {successMsg && (
+                <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
 
               {error && (
-                <div className="p-2.5 rounded-xl bg-rose-950/50 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <div className="pt-2 flex items-center justify-between">
-                <p className="text-[11px] text-slate-400">
-                  {lang === 'bn'
-                    ? 'সাবমিট করার পর এডমিন ভেরিফাই করে অনুমোদন দিলেই আপনার প্লান লাইভ হবে।'
-                    : 'Once submitted, your plan goes live after admin approval.'}
-                </p>
+              {/* Method Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">
+                  {lang === 'bn' ? '১. পেমেন্ট মেথড নির্বাচন করুন:' : '1. Select Deposit Method:'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setDepositMethod('binance')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      depositMethod === 'binance'
+                        ? 'bg-[#f3ba2f]/15 border-[#f3ba2f] text-[#f3ba2f] ring-2 ring-[#f3ba2f]/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm">USDT (Binance)</span>
+                    <span className="text-[10px] text-amber-400">USD ব্যালেন্স</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDepositMethod('bkash')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      depositMethod === 'bkash'
+                        ? 'bg-[#e2136e]/15 border-[#e2136e] text-[#e2136e] ring-2 ring-[#e2136e]/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm">bKash (বিকাশ)</span>
+                    <span className="text-[10px] text-pink-400">BDT ব্যালেন্স</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDepositMethod('nagad')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      depositMethod === 'nagad'
+                        ? 'bg-[#f7941d]/15 border-[#f7941d] text-[#f7941d] ring-2 ring-[#f7941d]/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm">Nagad (নগদ)</span>
+                    <span className="text-[10px] text-amber-500">BDT ব্যালেন্স</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDepositMethod('rocket')}
+                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      depositMethod === 'rocket'
+                        ? 'bg-[#8c3494]/15 border-[#8c3494] text-[#a445ad] ring-2 ring-[#8c3494]/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm">Rocket (রকেট)</span>
+                    <span className="text-[10px] text-purple-400">BDT ব্যালেন্স</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Account Details Box */}
+              <div className="p-4 rounded-xl bg-[#080d17] border border-[#1f2d48] space-y-3 text-xs">
+                <span className="text-[10px] font-bold text-[#0088cc] uppercase tracking-wider">
+                  {lang === 'bn' ? 'টাকা বা ডলার পাঠানোর ঠিকানা / একাউন্ট:' : 'Payment Account Details:'}
+                </span>
+
+                {depositMethod === 'binance' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {paymentSettings?.binanceUid && (
+                      <div className="p-2.5 rounded-lg bg-[#0d1627] border border-amber-500/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Binance UID (Personal)</p>
+                          <p className="font-mono text-amber-400 font-extrabold text-sm select-all">{paymentSettings.binanceUid}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(paymentSettings.binanceUid, 'b_uid')}
+                          className="px-2.5 py-1 rounded bg-[#16233b] hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedKey === 'b_uid' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'b_uid' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {paymentSettings?.binancePayId && (
+                      <div className="p-2.5 rounded-lg bg-[#0d1627] border border-amber-500/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Binance Pay ID</p>
+                          <p className="font-mono text-amber-400 font-extrabold text-sm select-all">{paymentSettings.binancePayId}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(paymentSettings.binancePayId, 'b_pay')}
+                          className="px-2.5 py-1 rounded bg-[#16233b] hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedKey === 'b_pay' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'b_pay' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {paymentSettings?.binanceId && (
+                      <div className="p-2.5 rounded-lg bg-[#0d1627] border border-amber-500/30 flex items-center justify-between sm:col-span-2">
+                        <div className="truncate mr-2">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Binance USDT Address (TRC20)</p>
+                          <p className="font-mono text-amber-300 font-semibold text-xs truncate select-all">{paymentSettings.binanceId}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(paymentSettings.binanceId, 'b_wallet')}
+                          className="px-2.5 py-1 rounded bg-[#16233b] hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          {copiedKey === 'b_wallet' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'b_wallet' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-[#0d1627] border border-[#1f2d48] flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">
+                        {depositMethod === 'bkash' ? 'bKash Personal (Send Money)' : depositMethod === 'nagad' ? 'Nagad Personal (Send Money)' : 'Rocket Personal (Send Money)'}
+                      </p>
+                      <p className="font-mono text-white font-black text-base select-all">
+                        {depositMethod === 'bkash'
+                          ? paymentSettings?.bkashNumber || '01711223344'
+                          : depositMethod === 'nagad'
+                          ? paymentSettings?.nagadNumber || '01811223344'
+                          : paymentSettings?.rocketNumber || '01911223344'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = depositMethod === 'bkash'
+                          ? paymentSettings?.bkashNumber || '01711223344'
+                          : depositMethod === 'nagad'
+                          ? paymentSettings?.nagadNumber || '01811223344'
+                          : paymentSettings?.rocketNumber || '01911223344';
+                        handleCopy(num, 'bd_num');
+                      }}
+                      className="px-3 py-1.5 rounded bg-[#16233b] hover:bg-[#0088cc]/20 text-slate-300 hover:text-[#0088cc] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedKey === 'bd_num' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === 'bd_num' ? 'Copied' : 'Copy Number'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Deposit Form */}
+              <form onSubmit={handleSubmitDeposit} className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? `জমার পরিমাণ (${depositCurrency}):` : `Amount to Deposit (${depositCurrency}):`}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={depositCurrency === 'USD' ? '1' : '50'}
+                        step={depositCurrency === 'USD' ? '0.5' : '10'}
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(e.target.value)}
+                        placeholder={depositCurrency === 'USD' ? '5.00' : '150'}
+                        className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                        required
+                      />
+                      <span className="absolute right-3 top-2.5 text-[11px] font-bold text-emerald-400">
+                        {depositCurrency}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {depositMethod === 'binance'
+                        ? (lang === 'bn' ? 'আপনার Binance UID / ইমেইল:' : 'Your Binance UID / Email:')
+                        : (lang === 'bn' ? 'যে নাম্বার থেকে টাকা পাঠিয়েছেন:' : 'Sender Phone Number:')}
+                    </label>
+                    <input
+                      type="text"
+                      value={senderIdentifier}
+                      onChange={(e) => setSenderIdentifier(e.target.value)}
+                      placeholder={depositMethod === 'binance' ? '849201948' : '017XXXXXXXX'}
+                      className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-emerald-400 mb-1">
+                      Transaction ID (TrxID):
+                    </label>
+                    <input
+                      type="text"
+                      value={depositTrxId}
+                      onChange={(e) => setDepositTrxId(e.target.value)}
+                      placeholder="e.g. 9J4K2L8M or 294819284"
+                      className="w-full bg-[#090e18] border border-emerald-500/40 rounded-xl p-2.5 text-xs text-white font-mono uppercase focus:outline-none focus:border-emerald-400"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-400 mb-1">
+                      {lang === 'bn' ? 'মন্তব্য (ঐচ্ছিক):' : 'Note (Optional):'}
+                    </label>
+                    <input
+                      type="text"
+                      value={depositNote}
+                      onChange={(e) => setDepositNote(e.target.value)}
+                      placeholder="e.g. For 1 month plan"
+                      className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#0088cc]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-[11px] text-slate-400">
+                    {lang === 'bn'
+                      ? 'এডমিন অনুমোদন করলে আপনার ওয়ালেটে ব্যালেন্স জমা হবে এবং ইমেইল এলার্ট পাবেন।'
+                      : 'You will receive an email confirmation once the admin approves your deposit.'}
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-500/20 cursor-pointer transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    <span>{loading ? (lang === 'bn' ? 'জমা হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'ডিপোজিট রিকোয়েস্ট জমা দিন' : 'Submit Deposit Request')}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* VIEW 3: USER TRANSACTION & REQUEST HISTORY */}
+          {activeView === 'history' && (
+            <div className="bg-[#0b1220] border border-[#1f2d48] rounded-2xl p-5 space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-[#1f2d48] pb-3">
+                <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  <span>{lang === 'bn' ? 'আপনার ডিপোজিট ও সাবস্ক্রিপশন হিস্টোরি' : 'Your Deposit & Subscription History'}</span>
+                </h4>
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#0088cc] to-sky-600 hover:opacity-95 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-[#0088cc]/25 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+                  type="button"
+                  onClick={fetchUserStatus}
+                  className="px-2.5 py-1 rounded-lg bg-[#16233b] hover:bg-[#1f2d48] text-slate-300 text-xs flex items-center gap-1 cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{loading ? (lang === 'bn' ? 'সাবমিট হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'প্লান রিকোয়েস্ট পাঠান' : 'Submit Plan Request')}</span>
+                  <RefreshCw className="w-3 h-3" />
+                  <span>{lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}</span>
                 </button>
               </div>
-            </form>
-          </div>
+
+              {allRequests.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 space-y-2">
+                  <Clock className="w-8 h-8 mx-auto text-slate-600" />
+                  <p>{lang === 'bn' ? 'আপনার কোনো পূর্ববর্তী রিকোয়েস্ট পাওয়া যায়নি।' : 'No deposit or plan requests found.'}</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {allRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="p-3.5 rounded-xl bg-[#0d1524] border border-[#1f2d48] flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-white text-xs">{req.planName}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-[#0088cc]/20 text-[#0088cc]">
+                            {req.amount} {req.currency}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-800 text-slate-300">
+                            {req.method}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          TrxID: <span className="text-white font-bold">{req.transactionId}</span> • {new Date(req.createdAt).toLocaleString('bn-BD')}
+                        </p>
+                      </div>
+
+                      <div>
+                        {req.status === 'pending' ? (
+                          <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center gap-1.5 animate-pulse">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{lang === 'bn' ? 'অনুমোদনের অপেক্ষায় (Pending)' : 'Pending Approval'}</span>
+                          </span>
+                        ) : req.status === 'approved' ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{lang === 'bn' ? 'অনুমোদিত (Approved)' : 'Approved'}</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-[11px]">
+                            {lang === 'bn' ? 'বাতিলকৃত' : 'Rejected'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* MODAL / OVERLAY: BUY NOW WITH WALLET CONFIRMATION */}
+        {buyingPlan && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-[#111a2e] border border-[#223352] rounded-3xl max-w-md w-full p-5 text-white shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#1f2d48] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold">
+                    <Crown className="w-4 h-4" />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-white">
+                    {lang === 'bn' ? 'প্যাকেজ কেনার নিশ্চিতকরণ' : 'Confirm Package Purchase'}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBuyingPlan(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Package Summary */}
+              <div className="p-3.5 rounded-xl bg-[#090f1a] border border-[#1a2538] space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white text-sm">{buyingPlan.nameBn}</span>
+                  <span className="px-2 py-0.5 rounded bg-[#0088cc]/20 text-[#0088cc] font-bold text-[10px]">
+                    {buyingPlan.durationDays} দিন মেয়াদ
+                  </span>
+                </div>
+                <p className="text-slate-400 text-[11px]">
+                  হোস্টিং সক্ষমতা: <strong className="text-emerald-400">{buyingPlan.maxBots === 999 ? 'আনলিমিটেড' : buyingPlan.maxBots}টি</strong> টেলিগ্রাম বট।
+                </p>
+              </div>
+
+              {/* Currency Selector */}
+              <div className="space-y-1.5 text-xs">
+                <label className="block font-bold text-slate-300">
+                  {lang === 'bn' ? 'কোন কারেন্সির ব্যালেন্স দিয়ে কাটবেন?' : 'Select Payment Currency:'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBuyCurrency('USD')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center cursor-pointer transition-all ${
+                      buyCurrency === 'USD'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 ring-1 ring-amber-500/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-400'
+                    }`}
+                  >
+                    <span>${buyingPlan.priceUsd} USD</span>
+                    <span className="text-[10px] text-slate-400 font-normal">ওয়ালেটে আছে: ${balanceUsd.toFixed(2)}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBuyCurrency('BDT')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center cursor-pointer transition-all ${
+                      buyCurrency === 'BDT'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/30'
+                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-400'
+                    }`}
+                  >
+                    <span>৳{buyingPlan.priceBdt} BDT</span>
+                    <span className="text-[10px] text-slate-400 font-normal">ওয়ালেটে আছে: ৳{balanceBdt.toFixed(2)}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Balance Check & Alerts */}
+              {buySuccess && (
+                <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{buySuccess}</span>
+                </div>
+              )}
+
+              {buyError && (
+                <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{buyError}</span>
+                </div>
+              )}
+
+              {/* Insufficient balance trigger */}
+              {((buyCurrency === 'USD' && balanceUsd < (buyingPlan.priceUsd || 0)) ||
+                (buyCurrency === 'BDT' && balanceBdt < (buyingPlan.priceBdt || 0))) && (
+                <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-300 text-xs space-y-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>{lang === 'bn' ? 'ওয়ালেটে পর্যাপ্ত ব্যালেন্স নেই!' : 'Insufficient Wallet Balance!'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    {lang === 'bn'
+                      ? `প্রয়োজন ${buyCurrency === 'USD' ? `$${buyingPlan.priceUsd} USD` : `৳${buyingPlan.priceBdt} BDT`}। প্রথমে ওয়ালেটে ডিপোজিট করুন।`
+                      : `Required: ${buyCurrency === 'USD' ? `$${buyingPlan.priceUsd} USD` : `৳${buyingPlan.priceBdt} BDT`}. Please deposit first.`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleStartDepositForPlan(buyingPlan)}
+                    className="w-full py-2 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? 'ওয়ালেটে ডিপোজিট করুন' : 'Deposit Funds Now'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1f2d48]">
+                <button
+                  type="button"
+                  onClick={() => setBuyingPlan(null)}
+                  className="px-4 py-2 rounded-xl bg-[#16233b] hover:bg-[#1e2d48] text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={
+                    buyLoading ||
+                    (buyCurrency === 'USD' && balanceUsd < (buyingPlan.priceUsd || 0)) ||
+                    (buyCurrency === 'BDT' && balanceBdt < (buyingPlan.priceBdt || 0))
+                  }
+                  onClick={handleBuyWithWallet}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {buyLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  <span>
+                    {buyLoading
+                      ? (lang === 'bn' ? 'ক্রয় হচ্ছে...' : 'Processing...')
+                      : (lang === 'bn' ? 'ব্যালেন্স দিয়ে কিনুন' : 'Confirm Purchase')}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

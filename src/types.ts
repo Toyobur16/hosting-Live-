@@ -3,9 +3,11 @@ export interface AuthUser {
   name: string;
   email: string;
   role?: 'admin' | 'user';
-  plan?: 'free' | '1_month' | '3_months' | '6_months' | '1_year';
+  plan?: string;
   planExpiresAt?: number | null;
   maxBots?: number;
+  balanceBdt?: number;
+  balanceUsd?: number;
   avatar?: string;
   isVerified?: boolean;
   verificationToken?: string;
@@ -13,7 +15,7 @@ export interface AuthUser {
 }
 
 export interface HostingPlan {
-  id: 'free' | '1_month' | '3_months' | '6_months' | '1_year';
+  id: string;
   nameBn: string;
   nameEn: string;
   durationDays: number;
@@ -23,6 +25,34 @@ export interface HostingPlan {
   popular?: boolean;
   featuresBn: string[];
   featuresEn: string[];
+}
+
+export interface DepositRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  amount: number;
+  currency: 'USD' | 'BDT';
+  method: 'binance' | 'bkash' | 'nagad' | 'rocket' | string;
+  senderIdentifier: string;
+  transactionId: string;
+  note?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectReason?: string;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface UserNotification {
+  id: string;
+  userId: string;
+  type: 'deposit_approved' | 'deposit_rejected' | 'plan_expiring' | 'plan_expired' | 'plan_purchased' | 'system';
+  title: string;
+  message: string;
+  createdAt: string;
+  read?: boolean;
 }
 
 export interface PlanRequest {
@@ -46,6 +76,8 @@ export interface PlanRequest {
 }
 
 export interface PaymentSettings {
+  binanceUid?: string;
+  binancePayId?: string;
   bkashNumber: string;
   nagadNumber: string;
   rocketNumber: string;

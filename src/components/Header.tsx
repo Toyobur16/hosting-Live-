@@ -40,6 +40,13 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTheme
 }) => {
   const runningCount = bots.filter((b) => b.status === 'running').length;
+  const isAdmin = Boolean(
+    user && (
+      user.role === 'admin' ||
+      user.email?.toLowerCase().trim() === 'mdtayburrahman1111@gmail.com' ||
+      user.email?.toLowerCase().trim() === 'toyobur@telegram.bot'
+    )
+  );
 
   return (
     <header className="bg-white dark:bg-[#111827] border-b border-[#e2e8f0] dark:border-[#1f293d] text-[#1e293b] dark:text-[#f3f4f6] sticky top-0 z-30 shadow-xs transition-colors">
@@ -104,26 +111,31 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls & User info */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Plans Button */}
+          {/* Plans & Wallet Button */}
           {onOpenPlansModal && (
             <button
               id="header-plans-btn"
               onClick={onOpenPlansModal}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-all shadow-2xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-              title={lang === 'bn' ? 'হোস্টিং প্লান ও সাবস্ক্রিপশন কিনুন' : 'Purchase Hosting Plans'}
+              title={lang === 'bn' ? 'হোস্টিং প্লান ও ওয়ালেট ডিপোজিট' : 'Purchase Hosting Plans & Wallet'}
             >
               <Crown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span>{lang === 'bn' ? 'প্লান কিনুন' : 'Plans'}</span>
+              <span>{lang === 'bn' ? 'প্লান ও ওয়ালেট' : 'Plans & Wallet'}</span>
+              {user && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-black">
+                  ৳{user.balanceBdt || 0}
+                </span>
+              )}
               {user?.plan && user.plan !== 'free' && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold uppercase">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold uppercase">
                   {user.plan.replace('_', ' ')}
                 </span>
               )}
             </button>
           )}
 
-          {/* Admin Panel Button (visible to admins) */}
-          {user?.role === 'admin' && onOpenAdminModal && (
+          {/* Admin Panel Button (visible ONLY to admins) */}
+          {isAdmin && onOpenAdminModal && (
             <button
               id="header-admin-btn"
               onClick={onOpenAdminModal}

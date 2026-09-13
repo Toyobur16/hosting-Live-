@@ -3,6 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { spawn, exec, execSync } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+import {
+  sendEmailAlert,
+  sendDepositProcessedAlert,
+  sendSubscriptionExpirationAlert,
+  getUserNotifications
+} from './server/emailAlerts';
 
 const app = express();
 const PORT = 3000;
@@ -161,12 +167,14 @@ if (!fs.existsSync(PLAN_REQUESTS_FILE)) {
 }
 
 const DEFAULT_PAYMENT_SETTINGS = {
+  binanceUid: '849201948',
+  binancePayId: '849201948',
+  binanceId: 'USDT (TRC20): TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
   bkashNumber: '01711223344 (Personal - Send Money)',
   nagadNumber: '01811223344 (Personal - Send Money)',
   rocketNumber: '01911223344 (Personal - Send Money)',
-  binanceId: 'USDT (TRC20): TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
-  instructionsBn: 'যেকোনো মেথডে টাকা সেন্ড মানি (Send Money) করার পর আপনার প্রেরক নাম্বার (Sender Number) ও Transaction ID (TrxID) নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার প্লান সক্রিয় হবে।',
-  instructionsEn: 'Send money to the provided number/wallet, then submit your Sender Phone Number and Transaction ID (TrxID) below. Once approved by admin, your plan activates instantly.'
+  instructionsBn: 'বাইন্যান্স (Binance Pay / UID) দিয়ে নির্ধারিত ডলার পাঠিয়ে আপনার Transaction ID / Order ID এবং আপনার প্রেরক আইডি নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার প্লান সক্রিয় হবে।',
+  instructionsEn: 'Send USDT via Binance Pay / UID, then submit your Binance Transaction ID / Order ID below. Once approved by admin, your plan activates instantly.'
 };
 
 if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
@@ -301,7 +309,8 @@ function savePlanRequests(data: any[]) {
 
 function getPaymentSettings(): any {
   try {
-    return JSON.parse(fs.readFileSync(PAYMENT_SETTINGS_FILE, 'utf-8'));
+    const data = JSON.parse(fs.readFileSync(PAYMENT_SETTINGS_FILE, 'utf-8'));
+    return { ...DEFAULT_PAYMENT_SETTINGS, ...data };
   } catch {
     return DEFAULT_PAYMENT_SETTINGS;
   }
@@ -354,6 +363,15 @@ function enrichUserWithPlanAndRole(user: any): any {
     user.plan = 'free';
     user.maxBots = 1;
     user.planExpiresAt = null;
+    changed = true;
+  }
+
+  if (typeof user.balanceBdt !== 'number') {
+    user.balanceBdt = 0;
+    changed = true;
+  }
+  if (typeof user.balanceUsd !== 'number') {
+    user.balanceUsd = 0;
     changed = true;
   }
 
@@ -887,17 +905,22 @@ app.post('/api/plans/purchase', (req, res) => {
   }
 
   const requests = getPlanRequests();
+  const isBinance = method === 'binance';
+  const amount = isBinance ? (plan.priceUsd || Math.round((plan.priceBdt || 150) / 120)) : (plan.priceBdt || 150);
+  const currency = isBinance ? 'USD' : 'BDT';
+
   const newRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    type: 'plan_purchase',
     userId: user.id,
     userName: user.name,
     userEmail: user.email,
     planId: plan.id,
     planName: plan.nameBn,
     durationDays: plan.durationDays,
-    amount: plan.priceBdt,
-    currency: 'BDT',
-    method: method || 'bkash',
+    amount,
+    currency,
+    method: method || 'binance',
     senderNumber: senderNumber.trim(),
     transactionId: transactionId.trim().toUpperCase(),
     note: (note || '').trim(),
@@ -915,6 +938,135 @@ app.post('/api/plans/purchase', (req, res) => {
   });
 });
 
+// Wallet Deposit Submission Endpoint
+app.post('/api/wallet/deposit', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'ডিপোজিট করতে প্রথমে লগইন করুন (Please login to deposit)' });
+  }
+
+  const { amount, currency, method, senderIdentifier, transactionId, note } = req.body;
+  const numAmount = parseFloat(amount);
+  if (!numAmount || numAmount <= 0) {
+    return res.status(400).json({ error: 'সঠিক পরিমাণ (Amount) লিখুন' });
+  }
+  if (!senderIdentifier || !senderIdentifier.trim()) {
+    return res.status(400).json({ error: 'প্রেরক ফোন নাম্বার বা Binance UID দিন' });
+  }
+  if (!transactionId || !transactionId.trim()) {
+    return res.status(400).json({ error: 'Transaction ID (TrxID) দিন' });
+  }
+
+  const requests = getPlanRequests();
+  const newRequest = {
+    id: `dep_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    type: 'deposit',
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+    planId: 'wallet_deposit',
+    planName: `ওয়ালেট ডিপোজিট (${numAmount} ${currency || 'USD'})`,
+    amount: numAmount,
+    currency: currency === 'BDT' ? 'BDT' : 'USD',
+    method: method || 'binance',
+    senderNumber: senderIdentifier.trim(),
+    senderIdentifier: senderIdentifier.trim(),
+    transactionId: transactionId.trim().toUpperCase(),
+    note: (note || '').trim(),
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  requests.unshift(newRequest);
+  savePlanRequests(requests);
+
+  res.json({
+    success: true,
+    message: 'আপনার ডিপোজিট রিকোয়েস্ট সফলভাবে জমা হয়েছে। এডমিন ভেরিফাই করে অনুমোদন করলেই আপনার ওয়ালেটে ব্যালেন্স যোগ হবে।',
+    request: newRequest
+  });
+});
+
+// Buy Plan with Wallet Balance Endpoint
+app.post('/api/plans/buy-with-wallet', async (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'প্যাকেজ কিনতে প্রথমে লগইন করুন (Please login to purchase)' });
+  }
+
+  const { planId, currency } = req.body;
+  if (!planId) return res.status(400).json({ error: 'প্লান নির্বাচন করুন' });
+
+  const plans = getPlans();
+  const plan = plans.find((p) => p.id === planId);
+  if (!plan) return res.status(404).json({ error: 'প্লানটি খুঁজে পাওয়া যায়নি (Plan not found)' });
+  if (plan.id === 'free') return res.status(400).json({ error: 'ফ্রি প্লান কেনার প্রয়োজন নেই।' });
+
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === user.id);
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+  targetUser.balanceBdt = typeof targetUser.balanceBdt === 'number' ? targetUser.balanceBdt : 0;
+  targetUser.balanceUsd = typeof targetUser.balanceUsd === 'number' ? targetUser.balanceUsd : 0;
+
+  const payCurrency = currency === 'BDT' ? 'BDT' : 'USD';
+  const price = payCurrency === 'BDT' ? (plan.priceBdt || 0) : (plan.priceUsd || 0);
+
+  if (payCurrency === 'USD') {
+    if (targetUser.balanceUsd < price) {
+      return res.status(400).json({
+        error: `আপনার ওয়ালেটে পর্যাপ্ত USD ব্যালেন্স নেই। প্রয়োজন: $${price} USD, বর্তমান ব্যালেন্স: $${targetUser.balanceUsd.toFixed(2)} USD। প্রথমে ডিপোজিট করুন।`,
+        needsDeposit: true,
+        requiredAmount: price,
+        currentBalance: targetUser.balanceUsd,
+        currency: 'USD'
+      });
+    }
+    targetUser.balanceUsd = parseFloat((targetUser.balanceUsd - price).toFixed(2));
+  } else {
+    if (targetUser.balanceBdt < price) {
+      return res.status(400).json({
+        error: `আপনার ওয়ালেটে পর্যাপ্ত BDT ব্যালেন্স নেই। প্রয়োজন: ৳${price} BDT, বর্তমান ব্যালেন্স: ৳${targetUser.balanceBdt.toFixed(2)} BDT। প্রথমে ডিপোজিট করুন।`,
+        needsDeposit: true,
+        requiredAmount: price,
+        currentBalance: targetUser.balanceBdt,
+        currency: 'BDT'
+      });
+    }
+    targetUser.balanceBdt = parseFloat((targetUser.balanceBdt - price).toFixed(2));
+  }
+
+  // Activate / extend user plan
+  const durationDays = plan.durationDays || 30;
+  targetUser.plan = plan.id;
+  targetUser.maxBots = plan.maxBots || 3;
+  const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
+  targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+  saveAccounts(accounts);
+
+  // Send in-app notification & email alert
+  sendEmailAlert({
+    to: targetUser.email,
+    userId: targetUser.id,
+    type: 'plan_purchased',
+    subject: `🎉 প্যাকেজ সফলভাবে কেনা হয়েছে (${plan.nameBn})`,
+    html: `<p>প্রিয় ${targetUser.name}, আপনি সফলভাবে <strong>${plan.nameBn}</strong> প্যাকেজটি ক্রয় করেছেন। ওয়ালেট থেকে ${price} ${payCurrency} কাটা হয়েছে। আপনার নতুন মেয়াদ: ${new Date(targetUser.planExpiresAt).toLocaleDateString('bn-BD')}।</p>`,
+    text: `আপনি সফলভাবে ${plan.nameBn} প্যাকেজটি কিনেছেন। ওয়ালেট থেকে ${price} ${payCurrency} কাটা হয়েছে।`
+  });
+
+  res.json({
+    success: true,
+    message: `🎉 অভিনন্দন! "${plan.nameBn}" সফলভাবে ক্রয় করা হয়েছে। আপনার প্লান সক্রিয় করা হয়েছে।`,
+    user: enrichUserWithPlanAndRole(targetUser)
+  });
+});
+
+app.get('/api/notifications', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.json({ notifications: [] });
+  res.json({ notifications: getUserNotifications(user.id) });
+});
+
 app.get('/api/plans/my-request', (req, res) => {
   const user = getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -928,7 +1080,9 @@ app.get('/api/plans/my-request', (req, res) => {
     allRequests: userRequests,
     userPlan: user.plan || 'free',
     planExpiresAt: user.planExpiresAt || null,
-    maxBots: user.maxBots || 1
+    maxBots: user.maxBots || 1,
+    balanceBdt: user.balanceBdt || 0,
+    balanceUsd: user.balanceUsd || 0
   });
 });
 
@@ -966,7 +1120,7 @@ app.get('/api/admin/plan-requests', (req, res) => {
   res.json({ requests: getPlanRequests() });
 });
 
-app.post('/api/admin/plan-requests/:id/approve', (req, res) => {
+app.post('/api/admin/plan-requests/:id/approve', async (req, res) => {
   const admin = getAuthUser(req);
   if (!isUserAdmin(admin)) {
     return res.status(403).json({ error: 'Admin access required' });
@@ -976,7 +1130,7 @@ app.post('/api/admin/plan-requests/:id/approve', (req, res) => {
   const requests = getPlanRequests();
   const reqIdx = requests.findIndex((r) => r.id === id);
   if (reqIdx === -1) {
-    return res.status(404).json({ error: 'Plan request not found' });
+    return res.status(404).json({ error: 'Request not found' });
   }
 
   const request = requests[reqIdx];
@@ -993,24 +1147,40 @@ app.post('/api/admin/plan-requests/:id/approve', (req, res) => {
   const accounts = getAccounts();
   const targetUser = accounts.find((a) => a.id === request.userId || (a.email && a.email.toLowerCase() === request.userEmail.toLowerCase()));
   if (targetUser) {
-    const durationDays = request.durationDays || 30;
-    targetUser.plan = request.planId;
-    const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
-    targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+    if (request.type === 'deposit') {
+      // Wallet deposit approval
+      if (request.currency === 'BDT') {
+        targetUser.balanceBdt = (targetUser.balanceBdt || 0) + (request.amount || 0);
+      } else {
+        targetUser.balanceUsd = (targetUser.balanceUsd || 0) + (request.amount || 0);
+      }
+      saveAccounts(accounts);
+      await sendDepositProcessedAlert(targetUser, request, 'approved');
+    } else {
+      // Direct plan request approval
+      const plans = getPlans();
+      const plan = plans.find((p) => p.id === request.planId);
+      const durationDays = request.durationDays || (plan ? plan.durationDays : 30);
+      targetUser.plan = request.planId;
+      const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
+      targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
 
-    if (request.planId === '1_month') targetUser.maxBots = 3;
-    else if (request.planId === '3_months') targetUser.maxBots = 5;
-    else if (request.planId === '6_months') targetUser.maxBots = 10;
-    else if (request.planId === '1_year') targetUser.maxBots = 999;
-    else targetUser.maxBots = 1;
+      if (request.planId === '1_month') targetUser.maxBots = 3;
+      else if (request.planId === '3_months') targetUser.maxBots = 5;
+      else if (request.planId === '6_months') targetUser.maxBots = 10;
+      else if (request.planId === '1_year') targetUser.maxBots = 999;
+      else if (plan && plan.maxBots) targetUser.maxBots = plan.maxBots;
+      else targetUser.maxBots = 1;
 
-    saveAccounts(accounts);
+      saveAccounts(accounts);
+      await sendDepositProcessedAlert(targetUser, request, 'approved');
+    }
   }
 
-  res.json({ success: true, message: 'প্লান সফলভাবে অনুমোদন করা হয়েছে (Plan approved successfully)', request, updatedUser: targetUser });
+  res.json({ success: true, message: 'অনুমোদন সফল হয়েছে (Approved successfully)', request, updatedUser: targetUser });
 });
 
-app.post('/api/admin/plan-requests/:id/reject', (req, res) => {
+app.post('/api/admin/plan-requests/:id/reject', async (req, res) => {
   const admin = getAuthUser(req);
   if (!isUserAdmin(admin)) {
     return res.status(403).json({ error: 'Admin access required' });
@@ -1021,17 +1191,23 @@ app.post('/api/admin/plan-requests/:id/reject', (req, res) => {
   const requests = getPlanRequests();
   const reqIdx = requests.findIndex((r) => r.id === id);
   if (reqIdx === -1) {
-    return res.status(404).json({ error: 'Plan request not found' });
+    return res.status(404).json({ error: 'Request not found' });
   }
 
   const request = requests[reqIdx];
   request.status = 'rejected';
-  request.rejectReason = reason || 'Invalid transaction or unpaid';
+  request.rejectReason = reason || 'ভুল বা অপর্যাপ্ত ট্রানজেকশন তথ্য (Invalid or unpaid)';
   request.reviewedAt = new Date().toISOString();
   request.reviewedBy = admin ? admin.email : 'admin';
   savePlanRequests(requests);
 
-  res.json({ success: true, message: 'প্লান রিকোয়েস্ট বাতিল করা হয়েছে (Plan request rejected)', request });
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === request.userId || (a.email && a.email.toLowerCase() === request.userEmail.toLowerCase()));
+  if (targetUser) {
+    await sendDepositProcessedAlert(targetUser, request, 'rejected');
+  }
+
+  res.json({ success: true, message: 'রিকোয়েস্ট বাতিল করা হয়েছে (Request rejected)', request });
 });
 
 app.get('/api/admin/users', (req, res) => {
@@ -1094,7 +1270,82 @@ app.post('/api/admin/payment-settings', (req, res) => {
 
   const settings = req.body;
   savePaymentSettings(settings);
-  res.json({ success: true, settings });
+  res.json({ success: true, settings: getPaymentSettings() });
+});
+
+app.post('/api/admin/plans', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { plans } = req.body;
+  if (!Array.isArray(plans)) {
+    return res.status(400).json({ error: 'Plans must be an array' });
+  }
+
+  savePlans(plans);
+  res.json({ success: true, plans: getPlans() });
+});
+
+// Admin Add New Plan
+app.post('/api/admin/plans/add', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id, nameBn, nameEn, durationDays, maxBots, priceBdt, priceUsd, popular, featuresBn, featuresEn } = req.body;
+  if (!nameBn || !nameEn) {
+    return res.status(400).json({ error: 'প্যাকেজের নাম দেওয়া আবশ্যক (Plan name required)' });
+  }
+
+  const plans = getPlans();
+  const planId = (id || nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '') || `plan_${Date.now()}`).trim();
+
+  if (plans.some((p) => p.id === planId)) {
+    return res.status(400).json({ error: 'এই আইডির প্যাকেজ ইতিমধ্যে রয়েছে (Plan ID already exists)' });
+  }
+
+  const newPlan = {
+    id: planId,
+    nameBn: nameBn.trim(),
+    nameEn: nameEn.trim(),
+    durationDays: parseInt(durationDays, 10) || 30,
+    maxBots: parseInt(maxBots, 10) || 1,
+    priceBdt: parseFloat(priceBdt) || 0,
+    priceUsd: parseFloat(priceUsd) || 0,
+    popular: Boolean(popular),
+    featuresBn: Array.isArray(featuresBn) ? featuresBn : (featuresBn ? featuresBn.split('\n').map((s: string) => s.trim()).filter(Boolean) : []),
+    featuresEn: Array.isArray(featuresEn) ? featuresEn : (featuresEn ? featuresEn.split('\n').map((s: string) => s.trim()).filter(Boolean) : [])
+  };
+
+  plans.push(newPlan);
+  savePlans(plans);
+
+  res.json({ success: true, message: 'নতুন প্যাকেজ সফলভাবে যুক্ত হয়েছে (New plan added)', plan: newPlan, plans });
+});
+
+// Admin Delete Plan
+app.delete('/api/admin/plans/:id', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { id } = req.params;
+  if (id === 'free') {
+    return res.status(400).json({ error: 'ফ্রি স্টার্টার প্লান ডিলিট করা যাবে না (Cannot delete free plan)' });
+  }
+
+  let plans = getPlans();
+  const exists = plans.some((p) => p.id === id);
+  if (!exists) return res.status(404).json({ error: 'Plan not found' });
+
+  plans = plans.filter((p) => p.id !== id);
+  savePlans(plans);
+
+  res.json({ success: true, message: 'প্যাকেজ ডিলিট করা হয়েছে (Plan deleted)', plans });
 });
 
 app.get('/api/admin/all-bots', (req, res) => {
@@ -1311,6 +1562,32 @@ app.post('/api/bots/:id/start', (req, res) => {
   const bot = reg.find((b) => b.id === id);
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (user && user.role !== 'admin') {
+    const maxAllowed = user.maxBots || 1;
+    // Check if user's paid plan is expired
+    if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
+      return res.status(403).json({
+        error: 'আপনার প্রিমিয়াম প্ল্যানের মেয়াদ শেষ হয়েছে। দয়া করে প্ল্যান রিনিউ করুন।',
+        planExpired: true
+      });
+    }
+
+    // Count how many other bots belonging to this user are currently running
+    const userRunningBots = reg.filter((b) =>
+      b.id !== id &&
+      (b.ownerId === user.id || b.owner === user.id || (b.ownerEmail && b.ownerEmail.toLowerCase() === user.email.toLowerCase())) &&
+      runningProcesses.has(b.id)
+    );
+
+    if (userRunningBots.length >= maxAllowed) {
+      return res.status(403).json({
+        error: `আপনার বর্তমান প্ল্যানে সর্বোচ্চ ${maxAllowed}টি বট চালু রাখার অনুমতি আছে। অতিরিক্ত বট চালু করতে প্ল্যান আপগ্রেড করুন।`,
+        planRequired: true
+      });
+    }
   }
 
   bot.autoRestart = true;
@@ -2181,6 +2458,84 @@ app.post('/api/users/:uid/balance', (req, res) => {
     }
   }
   res.status(404).json({ error: 'users.json not found' });
+});
+
+// Background Watchdog: automatically checks for expired plans, halts excess bots and resets limits
+setInterval(() => {
+  try {
+    const accounts = getAccounts();
+    const now = Date.now();
+    let accountsModified = false;
+    const reg = getRegistry();
+
+    // Check for subscriptions expiring soon (within 3 days) or already expired
+    for (const account of accounts) {
+      if (account.role !== 'admin' && account.planExpiresAt) {
+        if (account.planExpiresAt > now) {
+          const diffMs = account.planExpiresAt - now;
+          const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+          if (diffMs <= threeDaysMs) {
+            const lastAlert = account.lastExpAlertAt || 0;
+            // Send alert at most once every 24 hours
+            if (now - lastAlert > 24 * 60 * 60 * 1000) {
+              const daysRemaining = Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+              const formattedDate = new Date(account.planExpiresAt).toLocaleDateString('bn-BD');
+              sendSubscriptionExpirationAlert(account, daysRemaining, formattedDate);
+              account.lastExpAlertAt = now;
+              accountsModified = true;
+            }
+          }
+        } else if (account.planExpiresAt < now) {
+          console.log(`[EXPIRED PLAN] Account ${account.email} has expired. Downgrading to Free plan.`);
+          account.plan = 'free';
+          account.maxBots = 1;
+          account.planExpiresAt = null;
+          accountsModified = true;
+
+          // Send expired alert
+          sendEmailAlert({
+            to: account.email,
+            userId: account.id,
+            type: 'plan_expired',
+            subject: '⚠️ আপনার Bot-Host পেইড প্লানের মেয়াদ সমাপ্ত হয়েছে',
+            html: `<p>প্রিয় ${account.name || 'গ্রাহক'}, আপনার পেইড প্যাকেজের মেয়াদ শেষ হয়েছে। একাউন্ট ফ্রি প্ল্যানে ডাউনগ্রেড করা হয়েছে। পুনরায় সেবা চালু রাখতে অনুগ্রহ করে ওয়ালেটে ডিপোজিট করে প্যাকেজ রিনিউ করুন।</p>`,
+            text: 'আপনার Bot-Host পেইড প্লানের মেয়াদ শেষ হয়েছে।'
+          });
+
+          // Find user's running bots and stop excess ones
+          const userBots = reg.filter((b) =>
+            b.ownerId === account.id ||
+            b.owner === account.id ||
+            (b.ownerEmail && b.ownerEmail.toLowerCase() === account.email.toLowerCase())
+          );
+
+          let activeCount = 0;
+          for (const bot of userBots) {
+            if (runningProcesses.has(bot.id)) {
+              activeCount++;
+              // If beyond 1 free bot, auto-stop excess bots
+              if (activeCount > 1) {
+                console.log(`[EXPIRED PLAN] Stopping excess bot ${bot.id} for user ${account.email}`);
+                stopBotProcess(bot.id);
+                appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার পেইড সাবস্ক্রিপশনের মেয়াদ শেষ হয়েছে। অতিরিক্ত বটটি বন্ধ করা হলো। প্ল্যান রিনিউ করুন।');
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (accountsModified) {
+      saveAccounts(accounts);
+    }
+  } catch (err) {
+    console.error('Watchdog plan expiry error:', err);
+  }
+}, 30000);
+
+// Admin Direct URL Route: allows visiting /admin directly in browser
+app.get(['/admin', '/admin/login'], (req, res) => {
+  res.redirect('/?admin=true');
 });
 
 // Vite middleware / Static Serving
