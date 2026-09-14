@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Trash2, Copy, Check, Search, Pause, Play, Square, RotateCw, ShieldCheck } from 'lucide-react';
+import { Terminal, Trash2, Copy, Check, Search, Pause, Play, Square, RotateCw, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { LogEntry } from '../types';
 
 interface LiveConsoleProps {
@@ -12,6 +12,7 @@ interface LiveConsoleProps {
   onStop?: () => void;
   onRestart?: () => void;
   loading?: boolean;
+  onBackToBots?: () => void;
 }
 
 export const LiveConsole: React.FC<LiveConsoleProps> = ({
@@ -23,7 +24,8 @@ export const LiveConsole: React.FC<LiveConsoleProps> = ({
   onStart,
   onStop,
   onRestart,
-  loading = false
+  loading = false,
+  onBackToBots
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -78,8 +80,18 @@ export const LiveConsole: React.FC<LiveConsoleProps> = ({
   return (
     <div className="bg-white dark:bg-[#111827] border border-[#e2e8f0] dark:border-[#1f293d] rounded-2xl overflow-hidden shadow-xs flex flex-col h-[560px] transition-colors">
       {/* Console Top Toolbar */}
-      <div className="bg-[#fcfdfe] dark:bg-[#111827] px-5 py-3 border-b border-[#f1f5f9] dark:border-[#1f293d] flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-[#fcfdfe] dark:bg-[#111827] px-4 sm:px-5 py-3 border-b border-[#f1f5f9] dark:border-[#1f293d] flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2.5">
+          {onBackToBots && (
+            <button
+              onClick={onBackToBots}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#1e293b] dark:hover:bg-[#334155] text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-200 dark:border-[#334155] transition-colors cursor-pointer mr-1"
+              title={lang === 'bn' ? 'আমার বটস তালিকায় ফিরে যান' : 'Back to My Bots'}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'আমার বটস' : 'My Bots'}</span>
+            </button>
+          )}
           <div className="w-7 h-7 rounded-xl bg-[#0088cc]/10 dark:bg-[#0088cc]/20 flex items-center justify-center text-[#0088cc]">
             <Terminal className="w-4 h-4" />
           </div>

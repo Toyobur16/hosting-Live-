@@ -426,7 +426,11 @@ function getAccounts(): any[] {
 }
 
 function saveAccounts(data: any[]) {
-  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save accounts:', err);
+  }
 }
 
 function getSessions(): Record<string, string> {
@@ -438,7 +442,11 @@ function getSessions(): Record<string, string> {
 }
 
 function saveSessions(data: Record<string, string>) {
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save sessions:', err);
+  }
 }
 
 function getPlans(): any[] {
@@ -507,7 +515,11 @@ function getBanners(): any[] {
 }
 
 function saveBanners(data: any[]) {
-  fs.writeFileSync(BANNERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(BANNERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save banners:', err);
+  }
 }
 
 function getCategories(): any[] {
@@ -519,7 +531,11 @@ function getCategories(): any[] {
 }
 
 function saveCategories(data: any[]) {
-  fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(CATEGORIES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save categories:', err);
+  }
 }
 
 function getStoreItems(): any[] {
@@ -531,7 +547,11 @@ function getStoreItems(): any[] {
 }
 
 function saveStoreItems(data: any[]) {
-  fs.writeFileSync(STORE_ITEMS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(STORE_ITEMS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save store items:', err);
+  }
 }
 
 function getSupportSettings(): any {
@@ -543,7 +563,11 @@ function getSupportSettings(): any {
 }
 
 function saveSupportSettings(data: any) {
-  fs.writeFileSync(SUPPORT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(SUPPORT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save support settings:', err);
+  }
 }
 
 function getSupportMessages(): any[] {
@@ -555,7 +579,11 @@ function getSupportMessages(): any[] {
 }
 
 function saveSupportMessages(data: any[]) {
-  fs.writeFileSync(SUPPORT_MESSAGES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(SUPPORT_MESSAGES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save support messages:', err);
+  }
 }
 
 function getWishlistMap(): Record<string, string[]> {
@@ -1940,7 +1968,7 @@ app.delete('/api/admin/plans/:id', (req, res) => {
 // ==========================================
 
 // Banners
-app.get('/api/store/banners', (req, res) => {
+app.get(['/api/store/banners', '/api/banners'], (req, res) => {
   const banners = getBanners();
   const activeBanners = banners.filter((b) => b.active !== false).sort((a, b) => (a.order || 0) - (b.order || 0));
   res.json({ banners: activeBanners });
@@ -2409,7 +2437,7 @@ if __name__ == "__main__":
 // ==========================================
 // SUPPORT CENTER & MESSAGES API
 // ==========================================
-app.get('/api/support/settings', (req, res) => {
+app.get(['/api/support/settings', '/api/support-settings'], (req, res) => {
   res.json({ settings: getSupportSettings() });
 });
 
@@ -2539,12 +2567,30 @@ app.get('/api/admin/all-bots', (req, res) => {
 // 2. Bot management
 app.get('/api/bots', (req, res) => {
   const reg = getRegistry();
-  // enrich with runtime status
-  const enriched = reg.map((b) => ({
-    ...b,
-    status: runningProcesses.has(b.id) ? 'running' : b.status || 'stopped',
-    pid: runningProcesses.has(b.id) ? runningProcesses.get(b.id)!.process.pid : null
-  }));
+  // enrich with runtime status, accurate uptimeSeconds, and fileCount
+  const enriched = reg.map((b) => {
+    const isRunning = runningProcesses.has(b.id);
+    const botDir = path.join(HOSTED_BOTS_DIR, b.dirName || b.id);
+    let fileCount = 1;
+    try {
+      if (fs.existsSync(botDir)) {
+        fileCount = fs.readdirSync(botDir).filter((f) => !f.startsWith('.')).length;
+      }
+    } catch {}
+    let uptimeSeconds = 0;
+    if (isRunning && runningProcesses.get(b.id)?.startTime) {
+      uptimeSeconds = Math.floor((Date.now() - runningProcesses.get(b.id)!.startTime) / 1000);
+    }
+    return {
+      ...b,
+      createdAt: b.createdAt || b.created || new Date().toISOString(),
+      ownerName: b.ownerName || b.owner || 'User',
+      status: isRunning ? 'running' : b.status || 'stopped',
+      pid: isRunning ? runningProcesses.get(b.id)!.process.pid : null,
+      fileCount: b.fileCount || fileCount,
+      uptimeSeconds: uptimeSeconds > 0 ? uptimeSeconds : (typeof b.uptimeSeconds === 'number' ? b.uptimeSeconds : 0)
+    };
+  });
   res.json({ bots: enriched });
 });
 

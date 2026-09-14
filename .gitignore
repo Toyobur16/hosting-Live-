@@ -6,3 +6,15 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Lock files from alternative package managers
+bun.lock
+bun.lockb
+package-lock.json.bak
+
+# Dynamic runtime auth session storage and process logs
+hosted_bots/sessions.json
+hosted_bots/*/*.log
+hosted_bots/*/venv/
+hosted_bots/*/__pycache__/
+

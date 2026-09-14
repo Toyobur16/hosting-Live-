@@ -596,6 +596,7 @@ export default function App() {
             onStop={() => selectedBot && handleStopBot(selectedBot.id)}
             onRestart={() => selectedBot && handleRestartBot(selectedBot.id)}
             loading={loading}
+            onBackToBots={() => setActiveTab('bots')}
           />
         )}
       </main>

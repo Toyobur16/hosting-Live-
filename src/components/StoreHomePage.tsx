@@ -156,6 +156,9 @@ export function StoreHomePage({
               alt={activeBanner.title}
               className="w-full h-full object-cover object-center transform group-hover:scale-102 transition-transform duration-700 brightness-75"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/40 to-transparent" />
