@@ -150,7 +150,7 @@ export function StoreHomePage({
       {/* 2. Hero Interactive Slider Banner */}
       {banners.length > 0 && activeBanner && (
         <div className="relative rounded-3xl overflow-hidden border border-slate-200 dark:border-[#162035] shadow-xl bg-slate-900 group">
-          <div className="relative h-56 sm:h-72 md:h-80 w-full overflow-hidden">
+          <div className="relative min-h-[260px] sm:min-h-[290px] md:h-80 w-full overflow-hidden">
             <img
               src={activeBanner.imageUrl}
               alt={activeBanner.title}
@@ -161,21 +161,21 @@ export function StoreHomePage({
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/40 to-transparent" />
 
             {/* Banner Content */}
-            <div className="absolute inset-0 p-6 sm:p-8 flex flex-col justify-end max-w-2xl">
+            <div className="absolute inset-0 p-5 sm:p-8 flex flex-col justify-end max-w-2xl">
               {activeBanner.badge && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00d293] text-slate-950 text-xs font-black mb-2.5 w-fit shadow-md">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#00d293] text-slate-950 text-[11px] sm:text-xs font-black mb-2 w-fit shadow-md">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{activeBanner.badge}</span>
                 </div>
               )}
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-tight mb-2">
+              <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-white leading-tight mb-1.5">
                 {lang === 'bn' ? activeBanner.titleBn || activeBanner.title : activeBanner.title}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 mb-4">
+              <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 mb-3 sm:mb-4">
                 {lang === 'bn' ? activeBanner.subtitleBn || activeBanner.subtitle : activeBanner.subtitle}
               </p>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => {
                     if (activeBanner.link === 'wallet') onNavigateToWallet();
@@ -273,7 +273,7 @@ export function StoreHomePage({
             )}
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
             {hasActivePlan ? (
               <>
                 <button

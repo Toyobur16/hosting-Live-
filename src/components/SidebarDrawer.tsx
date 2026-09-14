@@ -3,6 +3,7 @@ import {
   X,
   Home,
   Crown,
+  ShoppingBag,
   PlusCircle,
   Server,
   Terminal,
@@ -12,7 +13,10 @@ import {
   Shield,
   LogOut,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Sun,
+  Moon,
+  Languages
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -30,6 +34,9 @@ interface SidebarDrawerProps {
   lang: 'bn' | 'en';
   onDeployNewBot: () => void;
   botsCount?: number;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
+  onToggleLang?: () => void;
 }
 
 export function SidebarDrawer({
@@ -45,7 +52,10 @@ export function SidebarDrawer({
   pendingRequestsCount = 0,
   lang,
   onDeployNewBot,
-  botsCount = 0
+  botsCount = 0,
+  theme,
+  onToggleTheme,
+  onToggleLang
 }: SidebarDrawerProps) {
   if (!isOpen) return null;
 
@@ -68,6 +78,13 @@ export function SidebarDrawer({
       icon: Crown,
       badge: 'VIP',
       color: 'amber'
+    },
+    {
+      id: 'market',
+      label: lang === 'bn' ? 'বট ও স্ক্রিপ্ট স্টোর' : 'Bot & Script Store',
+      icon: ShoppingBag,
+      badge: lang === 'bn' ? 'ফাইল' : 'Files',
+      color: 'emerald'
     },
     {
       id: 'deploy_action',
@@ -173,11 +190,45 @@ export function SidebarDrawer({
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors shrink-0"
                 title="Close"
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Quick Controls Bar: Language & Theme */}
+            <div className="px-3 py-2.5 bg-slate-50 dark:bg-[#0c1222] border-b border-slate-200 dark:border-[#162035] flex items-center gap-2">
+              {onToggleLang && (
+                <button
+                  type="button"
+                  onClick={onToggleLang}
+                  className="flex-1 py-2 px-2.5 rounded-xl bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-[#1b253b] border border-slate-200 dark:border-[#1e293b] text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                >
+                  <Languages className="w-3.5 h-3.5 text-[#00d293]" />
+                  <span>{lang === 'bn' ? 'বাংলা (BN)' : 'English (EN)'}</span>
+                </button>
+              )}
+
+              {onToggleTheme && (
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className="flex-1 py-2 px-2.5 rounded-xl bg-white dark:bg-[#111827] hover:bg-slate-100 dark:hover:bg-[#1b253b] border border-slate-200 dark:border-[#1e293b] text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                >
+                  {theme === 'dark' ? (
+                    <>
+                      <Sun className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{lang === 'bn' ? 'ডার্ক মোড' : 'Dark Mode'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="w-3.5 h-3.5 text-slate-700" />
+                      <span>{lang === 'bn' ? 'লাইট মোড' : 'Light Mode'}</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Navigation List */}

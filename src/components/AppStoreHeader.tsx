@@ -8,9 +8,10 @@ import {
   Wallet,
   Sun,
   Moon,
-  Rocket,
   PlusCircle,
-  Crown
+  Crown,
+  ShoppingBag,
+  Headphones
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -72,41 +73,25 @@ export function AppStoreHeader({
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#162035] transition-colors">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
-        {/* Left Branding: hosting-Live Fast & USDT Balance Button */}
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 h-15 sm:h-16 flex items-center justify-between gap-1 sm:gap-3 w-full">
+        {/* Left Branding: hosting-Live Fast */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 min-w-0">
           <button
-            onClick={() => onSelectTab('home')}
-            className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-hidden"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00d293] to-emerald-400 flex items-center justify-center shadow-lg shadow-[#00d293]/20 group-hover:scale-105 transition-transform">
-              <Server className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
-                hosting-Live Fast
-              </span>
-              <span className="text-[10px] font-bold text-[#00d293] tracking-wider uppercase">
-                {lang === 'bn' ? '২৪/৭ ক্লাউড বট হোস্টিং' : '24/7 Cloud Bot & Web Hosting'}
-              </span>
-            </div>
-          </button>
-
-          {/* Balance Button right beside Website Name */}
-          <button
-            id="brand-usdt-balance-button"
             type="button"
-            onClick={() => (user ? onSelectTab('wallet') : onOpenAuthModal())}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-600 dark:text-[#00d293] cursor-pointer transition-all shadow-xs hover:scale-102"
-            title={user ? (lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট দেখুন' : 'View USDT Wallet & Deposit') : (lang === 'bn' ? 'লগইন করুন' : 'Login to view balance')}
+            onClick={() => onSelectTab('home')}
+            className="flex items-center gap-1.5 sm:gap-2.5 group cursor-pointer text-left focus:outline-hidden shrink-0"
           >
-            <Wallet className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span className="font-extrabold tracking-tight">
-              ${user ? Number(user.balanceUsd || 0).toFixed(2) : '0.00'}
-            </span>
-            <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider">
-              USDT
-            </span>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00d293] to-emerald-400 flex items-center justify-center shadow-md shadow-[#00d293]/20 group-hover:scale-105 transition-transform shrink-0">
+              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+            </div>
+            <div className="flex flex-col min-w-0 max-w-[105px] xs:max-w-[150px] sm:max-w-none">
+              <span className="text-xs sm:text-base lg:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1 truncate">
+                hosting-Live
+              </span>
+              <span className="hidden xs:inline text-[8px] sm:text-[10px] font-bold text-[#00a876] dark:text-[#00d293] tracking-wider uppercase truncate">
+                {lang === 'bn' ? '২৪/৭ ক্লাউড বট' : '24/7 Cloud Bot'}
+              </span>
+            </div>
           </button>
         </div>
 
@@ -123,7 +108,6 @@ export function AppStoreHeader({
             {lang === 'bn' ? 'হোম' : 'Home'}
           </button>
 
-          {/* Plans replaces Market */}
           <button
             onClick={() => onSelectTab('plans')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -136,16 +120,26 @@ export function AppStoreHeader({
             {lang === 'bn' ? 'প্ল্যানস' : 'Plans'}
           </button>
 
-          {/* Deploy New Bot replaces Wishlist - Plan Gated */}
+          <button
+            onClick={() => onSelectTab('market')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'market'
+                ? 'bg-[#00d293] text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5" />
+            {lang === 'bn' ? 'বট ও স্ক্রিপ্ট স্টোর' : 'Store Files'}
+          </button>
+
           <button
             onClick={onDeployNewBot}
             className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 bg-[#00d293]/15 hover:bg-[#00d293]/25 text-[#00a876] dark:text-[#00d293] border border-[#00d293]/30"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            {lang === 'bn' ? 'ডিপ্লয় বট' : 'Deploy New Bot'}
+            {lang === 'bn' ? 'ডিপ্লয় বট' : 'Deploy Bot'}
           </button>
 
-          {/* My Bots replaces Downloads */}
           <button
             onClick={() => onSelectTab('bots')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -177,71 +171,65 @@ export function AppStoreHeader({
 
           <button
             onClick={() => onSelectTab('support')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
               activeTab === 'support'
                 ? 'bg-[#00d293] text-slate-950 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
+            <Headphones className="w-3.5 h-3.5" />
             {lang === 'bn' ? 'সাপোর্ট' : 'Support'}
           </button>
         </nav>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
-          {/* Quick Deploy button on tablet/mobile */}
+        {/* Right Actions: Mobile Optimized, Compact, Never Cut Off */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* EXACTLY ONE USDT Wallet Balance Button */}
           <button
-            onClick={onDeployNewBot}
-            className="hidden md:flex lg:hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black shadow-xs cursor-pointer transition-all"
+            id="header-single-usdt-balance-button"
+            type="button"
+            onClick={() => (user ? onSelectTab('wallet') : onOpenAuthModal())}
+            className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-600 dark:text-[#00d293] cursor-pointer transition-all shadow-xs hover:scale-102 shrink-0"
+            title={user ? (lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট দেখুন' : 'View USDT Wallet & Deposit') : (lang === 'bn' ? 'লগইন করুন' : 'Login to view balance')}
           >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>{lang === 'bn' ? 'ডিপ্লয় বট' : 'Deploy'}</span>
+            <Wallet className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="font-extrabold tracking-tight whitespace-nowrap text-[11px] sm:text-xs">
+              ${user ? Number(user.balanceUsd || 0).toFixed(2) : '0.00'}
+            </span>
+            <span className="px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0">
+              USDT
+            </span>
           </button>
 
-          {/* User Balance Chip */}
-          {user && (
-            <button
-              onClick={() => onSelectTab('wallet')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#0f1b2b] hover:bg-slate-200 dark:hover:bg-[#142338] border border-slate-200 dark:border-[#00d293]/30 text-xs font-bold text-slate-800 dark:text-[#00d293] cursor-pointer transition-all"
-              title={lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট দেখুন' : 'View Wallet & Deposit'}
-            >
-              <Wallet className="w-3.5 h-3.5 text-[#00d293]" />
-              <span className="font-extrabold">${(user.balanceUsd || 0).toFixed(2)}</span>
-              <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold uppercase">
-                USDT
-              </span>
-            </button>
-          )}
-
-          {/* Language Switch Button */}
+          {/* Language Switch Button (Desktop & Tablet) */}
           <button
             onClick={onToggleLang}
-            className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+            className="hidden md:flex p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 font-bold text-xs items-center gap-1 cursor-pointer transition-colors shrink-0"
             title={lang === 'bn' ? 'Switch to English' : 'বাংলা ভাষায় দেখুন'}
           >
             <Languages className="w-3.5 h-3.5 text-[#00d293]" />
-            <span>{lang === 'bn' ? 'EN' : 'বাংলা'}</span>
+            <span className="text-[11px] font-black">{lang === 'bn' ? 'EN' : 'বাংলা'}</span>
           </button>
 
-          {/* Theme Toggle Button */}
+          {/* Theme Toggle Button (Desktop & Tablet) */}
           <button
             onClick={onToggleTheme}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:text-amber-500 cursor-pointer transition-colors"
+            className="hidden md:flex p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:text-amber-500 cursor-pointer transition-colors shrink-0"
             title={theme === 'dark' ? 'Switch to Light Mode' : 'ডার্ক মোড চালু করুন'}
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>
 
           {/* Notification Bell */}
           <button
             id="header-notification-btn"
             onClick={onOpenNotifications}
-            className="relative p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white cursor-pointer transition-colors"
+            className="relative p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white cursor-pointer transition-colors shrink-0"
             title={lang === 'bn' ? 'নোটিফিকেশন সেন্টার' : 'Notifications'}
           >
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+            <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shadow-md animate-pulse">
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-md animate-pulse">
                 {unreadNotifications}
               </span>
             )}
@@ -252,7 +240,7 @@ export function AppStoreHeader({
             <button
               id="header-user-avatar-btn"
               onClick={() => onSelectTab('profile')}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-200 dark:bg-[#1e293b] border-2 border-[#00d293] flex items-center justify-center text-slate-900 dark:text-white font-black text-sm shadow-md hover:scale-105 cursor-pointer transition-transform"
+              className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-slate-200 dark:bg-[#1e293b] border-2 border-[#00d293] flex items-center justify-center text-slate-900 dark:text-white font-black text-xs sm:text-sm shadow-md hover:scale-105 cursor-pointer transition-transform shrink-0"
               title={`${user.name || user.email} (${lang === 'bn' ? 'প্রোফাইল দেখুন' : 'View Profile'})`}
             >
               {getUserInitial()}
@@ -261,20 +249,20 @@ export function AppStoreHeader({
             <button
               id="header-login-btn"
               onClick={onOpenAuthModal}
-              className="px-3 sm:px-4 py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black shadow-md cursor-pointer transition-all hover:scale-102"
+              className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black shadow-md cursor-pointer transition-all shrink-0 hover:scale-102"
             >
               {lang === 'bn' ? 'লগইন' : 'Login'}
             </button>
           )}
 
-          {/* Hamburger Menu for Mobile */}
+          {/* Hamburger Menu - ALWAYS VISIBLE, NEVER CUT OFF */}
           <button
             id="header-sidebar-menu-btn"
             onClick={onOpenSidebar}
-            className="p-2 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white cursor-pointer transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl bg-[#00d293]/15 hover:bg-[#00d293]/25 border border-[#00d293]/30 text-[#00a876] dark:text-[#00d293] cursor-pointer transition-colors shrink-0 shadow-xs flex items-center justify-center"
             title={lang === 'bn' ? 'মেনু খুলুন' : 'Open Menu'}
           >
-            <Menu className="w-5 h-5 stroke-[2.5]" />
+            <Menu className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
           </button>
         </div>
       </div>

@@ -1,14 +1,14 @@
 {
-  "binanceUid": "849201948",
-  "binancePayId": "849201948",
-  "binanceId": "USDT (TRC20): TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+  "binanceUid": "922593999",
+  "binancePayId": "922593999",
+  "binanceId": "922593999",
   "binanceEnabled": true,
-  "bkashNumber": "01711223344 (Personal - Send Money)",
-  "bkashEnabled": false,
-  "nagadNumber": "01811223344 (Personal - Send Money)",
-  "nagadEnabled": false,
-  "rocketNumber": "01911223344 (Personal - Send Money)",
-  "rocketEnabled": false,
-  "instructionsBn": "বাইন্যান্স (Binance Pay / UID) দিয়ে নির্ধারিত ডলার পাঠিয়ে আপনার Transaction ID / Order ID এবং আপনার প্রেরক আইডি নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার ওয়ালেটে ব্যালেন্স জমা হবে।",
-  "instructionsEn": "Send USDT via Binance Pay / UID, then submit your Binance Transaction ID / Order ID below. Once approved by admin, your balance is credited instantly."
+  "bkashNumber": "01614572747",
+  "bkashEnabled": true,
+  "nagadNumber": "01304104492",
+  "nagadEnabled": true,
+  "rocketNumber": "01304104492",
+  "rocketEnabled": true,
+  "instructionsBn": "বাইন্যান্স (Binance Pay / UID) অথবা বিকাশ, নগদ ও রকেটে সেন্ড মানি করে আপনার Transaction ID (TrxID) এবং প্রেরক নাম্বার/আইডি নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার ওয়ালেটে ব্যালেন্স জমা হবে।",
+  "instructionsEn": "Send money via Binance (USDT), bKash, Nagad or Rocket, then submit your Transaction ID and sender info below. Once approved by admin, balance is credited instantly."
 }

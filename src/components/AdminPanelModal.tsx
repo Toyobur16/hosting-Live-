@@ -11,6 +11,8 @@ import { AdminBannersManager } from './admin/AdminBannersManager';
 import { AdminSupportManager } from './admin/AdminSupportManager';
 import { AdminNoticesManager } from './admin/AdminNoticesManager';
 import { AdminSmtpManager } from './admin/AdminSmtpManager';
+import { AdminStoreManager } from './admin/AdminStoreManager';
+import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   lang,
   onBotAction
 }) => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'banners' | 'notices' | 'support' | 'payments' | 'bots' | 'smtp'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'store' | 'categories' | 'banners' | 'notices' | 'support' | 'payments' | 'bots' | 'smtp'>('requests');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<{
     totalUsers: number;
@@ -343,8 +345,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#050811]/90 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-[#111927] border border-[#1f2c42] shadow-2xl rounded-3xl max-w-5xl w-full p-5 sm:p-7 text-white relative overflow-hidden max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#050811]/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-[#111927] border border-[#1f2c42] shadow-2xl rounded-2xl sm:rounded-3xl max-w-5xl w-full p-3.5 sm:p-6 text-white relative overflow-hidden h-[96vh] sm:h-auto sm:max-h-[95vh] flex flex-col">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#1f2c42] pb-4 mb-3">
@@ -472,6 +474,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           >
             <DollarSign className="w-3.5 h-3.5 text-amber-400" />
             <span>{lang === 'bn' ? 'প্যাকেজ ও মূল্য নির্ধারণ' : 'Packages & Pricing'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'store'
+                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-[#00d293]" />
+            <span>{lang === 'bn' ? 'স্টোর ও ফাইলসমূহ' : 'Store Files'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'categories'
+                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <Folder className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? 'ক্যাটাগরি সমূহ' : 'Categories'}</span>
           </button>
 
           <button
@@ -1190,6 +1216,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ))}
           </div>
         )}
+
+        {/* Store Items & Files Tab */}
+        {activeTab === 'store' && <AdminStoreManager />}
+
+        {/* Categories Tab */}
+        {activeTab === 'categories' && <AdminCategoriesManager />}
 
         {/* Hero Banners Control Tab */}
         {activeTab === 'banners' && <AdminBannersManager />}

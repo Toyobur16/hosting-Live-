@@ -17,7 +17,7 @@ export function BottomNavBar({
   onDeployNewBot
 }: BottomNavBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-t border-slate-200 dark:border-[#162035] py-1.5 px-3 transition-colors shadow-lg">
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-t border-slate-200 dark:border-[#162035] py-1.5 px-2 transition-colors shadow-lg">
       <div className="max-w-md mx-auto flex items-center justify-around">
         {/* 1. Home */}
         <button
