@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -7,7 +8,13 @@ import {
   sendEmailAlert,
   sendDepositProcessedAlert,
   sendSubscriptionExpirationAlert,
-  getUserNotifications
+  getUserNotifications,
+  markNotificationAsRead,
+  addBroadcastNotification,
+  getSmtpConfig,
+  verifySmtpConnection,
+  sendTestEmail,
+  checkAndSendExpiringPlanAlerts
 } from './server/emailAlerts';
 
 const app = express();
@@ -31,6 +38,8 @@ const SUPPORT_MESSAGES_FILE = path.join(HOSTED_BOTS_DIR, 'support_messages.json'
 const WISHLIST_FILE = path.join(HOSTED_BOTS_DIR, 'wishlist.json');
 const STORE_UPLOADS_DIR = path.join(HOSTED_BOTS_DIR, 'store_uploads');
 const STORE_THUMBNAILS_DIR = path.join(HOSTED_BOTS_DIR, 'store_thumbnails');
+const ANNOUNCEMENTS_FILE = path.join(HOSTED_BOTS_DIR, 'announcements.json');
+const SITE_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'site_settings.json');
 
 // Ensure base directories and persistence files exist
 if (!fs.existsSync(HOSTED_BOTS_DIR)) {
@@ -41,6 +50,44 @@ if (!fs.existsSync(STORE_UPLOADS_DIR)) {
 }
 if (!fs.existsSync(STORE_THUMBNAILS_DIR)) {
   fs.mkdirSync(STORE_THUMBNAILS_DIR, { recursive: true });
+}
+if (!fs.existsSync(ANNOUNCEMENTS_FILE)) {
+  fs.writeFileSync(
+    ANNOUNCEMENTS_FILE,
+    JSON.stringify(
+      [
+        {
+          id: 'ann_1',
+          titleBn: '⚡ hosting-Live Fast এ স্বাগতম!',
+          titleEn: '⚡ Welcome to hosting-Live Fast!',
+          messageBn: '২৪/৭ ক্লাউড টেলিগ্রাম বট হোস্টিং, স্বয়ংক্রিয় রিস্টার্ট এবং ইনস্ট্যান্ট বাইনান্স ডিপোজিট সহ আপনার বট লাইভ রাখুন।',
+          messageEn: '24/7 cloud Telegram bot hosting, auto-restart watchdog, and instant Binance deposits to keep your bot live.',
+          date: new Date().toISOString(),
+          active: true
+        }
+      ],
+      null,
+      2
+    ),
+    'utf-8'
+  );
+}
+
+function getAnnouncements(): any[] {
+  try {
+    if (!fs.existsSync(ANNOUNCEMENTS_FILE)) return [];
+    return JSON.parse(fs.readFileSync(ANNOUNCEMENTS_FILE, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveAnnouncements(list: any[]) {
+  try {
+    fs.writeFileSync(ANNOUNCEMENTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save announcements:', err);
+  }
 }
 if (!fs.existsSync(REGISTRY_FILE)) {
   fs.writeFileSync(REGISTRY_FILE, JSON.stringify([], null, 2), 'utf-8');
@@ -186,13 +233,13 @@ const DEFAULT_PAYMENT_SETTINGS = {
   binanceId: '922593999',
   binanceEnabled: true,
   bkashNumber: '01614572747',
-  bkashEnabled: true,
+  bkashEnabled: false,
   nagadNumber: '01304104492',
-  nagadEnabled: true,
+  nagadEnabled: false,
   rocketNumber: '01304104492',
   rocketEnabled: false,
-  instructionsBn: 'বিকাশ, নগদ বা বাইন্যান্সে সেন্ড মানি করে Transaction ID এবং প্রেরক নাম্বার নিচে সাবমিট করুন। এডমিন অনুমোদন করলেই ওয়ালেট ব্যালেন্স স্বয়ংক্রিয়ভাবে যোগ হবে।',
-  instructionsEn: 'Send money via bKash, Nagad or Binance and submit the Transaction ID & sender info below.'
+  instructionsBn: 'বাইন্যান্স (Binance Pay / UID) দিয়ে নির্ধারিত ডলার পাঠিয়ে আপনার Transaction ID / Order ID এবং আপনার প্রেরক আইডি নিচে লিখে সাবমিট করুন। এডমিন অনুমোদন করলেই সাথে সাথে আপনার ওয়ালেটে ব্যালেন্স জমা হবে।',
+  instructionsEn: 'Send USDT via Binance Pay / UID, then submit your Binance Transaction ID / Order ID below. Once approved by admin, your balance is credited instantly.'
 };
 
 if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
@@ -210,6 +257,17 @@ if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
       fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(curr, null, 2), 'utf-8');
     }
   } catch {}
+}
+
+const DEFAULT_SITE_SETTINGS = {
+  siteName: 'hosting-Live Fast',
+  logoUrl: '',
+  taglineBn: '২৪/৭ ক্লাউড বট হোস্টিং',
+  taglineEn: '24/7 Cloud Bot & Web Hosting'
+};
+
+if (!fs.existsSync(SITE_SETTINGS_FILE)) {
+  fs.writeFileSync(SITE_SETTINGS_FILE, JSON.stringify(DEFAULT_SITE_SETTINGS, null, 2), 'utf-8');
 }
 
 const DEFAULT_BANNERS = [
@@ -420,6 +478,22 @@ function getPaymentSettings(): any {
 
 function savePaymentSettings(data: any) {
   fs.writeFileSync(PAYMENT_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function getSiteSettings(): any {
+  try {
+    if (fs.existsSync(SITE_SETTINGS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SITE_SETTINGS_FILE, 'utf-8'));
+      return { ...DEFAULT_SITE_SETTINGS, ...data };
+    }
+    return DEFAULT_SITE_SETTINGS;
+  } catch {
+    return DEFAULT_SITE_SETTINGS;
+  }
+}
+
+function saveSiteSettings(data: any) {
+  fs.writeFileSync(SITE_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 function getBanners(): any[] {
@@ -1068,6 +1142,14 @@ app.get('/api/payment-settings', (req, res) => {
   res.json({ settings: getPaymentSettings() });
 });
 
+app.get('/api/settings/payment', (req, res) => {
+  res.json(getPaymentSettings());
+});
+
+app.get('/api/site-settings', (req, res) => {
+  res.json({ settings: getSiteSettings() });
+});
+
 app.post('/api/plans/purchase', (req, res) => {
   const user = getAuthUser(req);
   if (!user) {
@@ -1244,8 +1326,114 @@ app.post('/api/plans/buy-with-wallet', async (req, res) => {
 
 app.get('/api/notifications', (req, res) => {
   const user = getAuthUser(req);
-  if (!user) return res.json({ notifications: [] });
-  res.json({ notifications: getUserNotifications(user.id) });
+  if (!user) {
+    const publicNotifs = getUserNotifications('', '');
+    return res.json({ notifications: publicNotifs.slice(0, 10) });
+  }
+  res.json({ notifications: getUserNotifications(user.id, user.email) });
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  const user = getAuthUser(req);
+  const { id } = req.body;
+  markNotificationAsRead(id || 'all', user?.id);
+  res.json({ success: true, message: 'Notifications marked as read' });
+});
+
+// Platform Announcements & Notices (Home ticker and banners)
+app.get('/api/announcements', (req, res) => {
+  const all = getAnnouncements();
+  const active = all.filter((a) => a.active !== false);
+  res.json({ announcements: active });
+});
+
+app.post('/api/admin/announcements', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { titleBn, titleEn, messageBn, messageEn, active } = req.body;
+  if (!titleBn && !titleEn) return res.status(400).json({ error: 'Notice title is required' });
+
+  const list = getAnnouncements();
+  const newAnn = {
+    id: `ann_${Date.now()}`,
+    titleBn: (titleBn || titleEn || '').trim(),
+    titleEn: (titleEn || titleBn || '').trim(),
+    messageBn: (messageBn || messageEn || '').trim(),
+    messageEn: (messageEn || messageBn || '').trim(),
+    date: new Date().toISOString(),
+    active: active !== false
+  };
+
+  list.unshift(newAnn);
+  saveAnnouncements(list);
+
+  // Also publish to notifications
+  addBroadcastNotification(newAnn.titleBn, newAnn.messageBn, 'broadcast');
+
+  res.json({ success: true, announcement: newAnn, announcements: list });
+});
+
+app.delete('/api/admin/announcements/:id', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  let list = getAnnouncements();
+  list = list.filter((a) => a.id !== req.params.id);
+  saveAnnouncements(list);
+  res.json({ success: true, announcements: list });
+});
+
+// Admin Broadcast to all users
+app.post('/api/admin/broadcast', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { title, message, type } = req.body;
+  if (!title || !message) return res.status(400).json({ error: 'Title and message are required' });
+
+  const notif = addBroadcastNotification(title.trim(), message.trim(), type || 'broadcast');
+
+  // Also add to active announcements for top home ticker
+  const list = getAnnouncements();
+  list.unshift({
+    id: `ann_${Date.now()}`,
+    titleBn: title.trim(),
+    titleEn: title.trim(),
+    messageBn: message.trim(),
+    messageEn: message.trim(),
+    date: new Date().toISOString(),
+    active: true
+  });
+  if (list.length > 30) list.splice(30);
+  saveAnnouncements(list);
+
+  res.json({ success: true, message: 'Broadcast sent to all users and announcements ticker', notification: notif });
+});
+
+app.post('/api/admin/notifications/send', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) return res.status(403).json({ error: 'Admin access required' });
+
+  const { targetUserId, targetEmail, title, message, type } = req.body;
+  if (!title || !message) return res.status(400).json({ error: 'Title and message are required' });
+
+  if (targetUserId === 'all' || (!targetUserId && !targetEmail)) {
+    const notif = addBroadcastNotification(title.trim(), message.trim(), type || 'broadcast');
+    return res.json({ success: true, message: 'Broadcast notification sent to all users', notification: notif });
+  }
+
+  // Single user notification
+  sendEmailAlert({
+    to: targetEmail || targetUserId,
+    userId: targetUserId,
+    subject: title.trim(),
+    html: `<p>${message.trim()}</p>`,
+    text: message.trim(),
+    type: (type as any) || 'system'
+  });
+
+  res.json({ success: true, message: 'Notification sent successfully to target user' });
 });
 
 app.get('/api/plans/my-request', (req, res) => {
@@ -1391,6 +1579,102 @@ app.post('/api/admin/plan-requests/:id/reject', async (req, res) => {
   res.json({ success: true, message: 'রিকোয়েস্ট বাতিল করা হয়েছে (Request rejected)', request });
 });
 
+// SMTP Status & Diagnostics Endpoint for Admin
+app.get('/api/admin/smtp-status', async (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const config = getSmtpConfig();
+  if (!config.configured) {
+    return res.json({
+      configured: false,
+      message: 'SMTP credentials not configured in .env (Requires SMTP_HOST, SMTP_USER, SMTP_PASS)',
+      config
+    });
+  }
+
+  const verifyResult = await verifySmtpConnection();
+  res.json({
+    configured: true,
+    connected: verifyResult.success,
+    message: verifyResult.message,
+    config
+  });
+});
+
+// Send Test Alert Email Endpoint for Admin
+app.post('/api/admin/smtp-test', async (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const recipient = (req.body.email || (admin ? admin.email : '')).trim();
+  if (!recipient || !recipient.includes('@')) {
+    return res.status(400).json({ error: 'সঠিক ইমেইল এড্রেস লিখুন (Valid email address required)' });
+  }
+
+  const result = await sendTestEmail(recipient);
+  if (result.success) {
+    res.json({
+      success: true,
+      message: `টেস্ট ইমেইল সফলভাবে '${recipient}' এ পাঠানো হয়েছে!`,
+      details: result
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      error: result.error || 'ইমেইল পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে SMTP সেটিংস যাচাই করুন।',
+      details: result
+    });
+  }
+});
+
+// Trigger Manual Expiration Scan Endpoint for Admin
+app.post('/api/admin/scan-expiring-plans', async (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const accounts = getAccounts();
+    const reg = getRegistry();
+
+    const result = await checkAndSendExpiringPlanAlerts(accounts, (expiredAccount) => {
+      const userBots = reg.filter((b) =>
+        b.ownerId === expiredAccount.id ||
+        b.owner === expiredAccount.id ||
+        (b.ownerEmail && b.ownerEmail.toLowerCase() === expiredAccount.email.toLowerCase())
+      );
+      let activeCount = 0;
+      for (const bot of userBots) {
+        if (runningProcesses.has(bot.id)) {
+          activeCount++;
+          if (activeCount > 1) {
+            stopBotProcess(bot.id);
+            appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার পেইড সাবস্ক্রিপশনের মেয়াদ শেষ হয়েছে। অতিরিক্ত বটটি বন্ধ করা হলো। প্ল্যান রিনিউ করুন।');
+          }
+        }
+      }
+    });
+
+    if (result.modified) {
+      saveAccounts(accounts);
+    }
+
+    res.json({
+      success: true,
+      message: `স্ক্যান সম্পন্ন: ${result.checkedCount} টি একাউন্ট যাচাই করা হয়েছে, ${result.alertedCount} জনকে মেয়াদ সতর্কবার্তা এবং ${result.expiredCount} টি মেয়াদোত্তীর্ণ একাউন্ট প্রসেস করা হয়েছে।`,
+      result
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'স্ক্যান করতে ত্রুটি হয়েছে' });
+  }
+});
+
 app.get('/api/admin/users', (req, res) => {
   const user = getAuthUser(req);
   if (!isUserAdmin(user)) {
@@ -1452,6 +1736,33 @@ app.post('/api/admin/payment-settings', (req, res) => {
   const settings = req.body;
   savePaymentSettings(settings);
   res.json({ success: true, settings: getPaymentSettings() });
+});
+
+app.get('/api/admin/site-settings', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  res.json({ success: true, settings: getSiteSettings() });
+});
+
+app.post('/api/admin/site-settings', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { siteName, logoUrl, taglineBn, taglineEn } = req.body;
+  const current = getSiteSettings();
+  const updated = {
+    ...current,
+    ...(typeof siteName === 'string' ? { siteName: siteName.trim() } : {}),
+    ...(typeof logoUrl === 'string' ? { logoUrl: logoUrl.trim() } : {}),
+    ...(typeof taglineBn === 'string' ? { taglineBn: taglineBn.trim() } : {}),
+    ...(typeof taglineEn === 'string' ? { taglineEn: taglineEn.trim() } : {})
+  };
+  saveSiteSettings(updated);
+  res.json({ success: true, settings: updated });
 });
 
 app.post('/api/admin/plans', (req, res) => {
@@ -3278,72 +3589,32 @@ app.post('/api/users/:uid/balance', (req, res) => {
   res.status(404).json({ error: 'users.json not found' });
 });
 
-// Background Watchdog: automatically checks for expired plans, halts excess bots and resets limits
-setInterval(() => {
+// Background Watchdog: automatically checks for expired plans, halts excess bots, resets limits, and sends near-expiry email alerts
+setInterval(async () => {
   try {
     const accounts = getAccounts();
-    const now = Date.now();
-    let accountsModified = false;
     const reg = getRegistry();
 
-    // Check for subscriptions expiring soon (within 3 days) or already expired
-    for (const account of accounts) {
-      if (account.role !== 'admin' && account.planExpiresAt) {
-        if (account.planExpiresAt > now) {
-          const diffMs = account.planExpiresAt - now;
-          const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-          if (diffMs <= threeDaysMs) {
-            const lastAlert = account.lastExpAlertAt || 0;
-            // Send alert at most once every 24 hours
-            if (now - lastAlert > 24 * 60 * 60 * 1000) {
-              const daysRemaining = Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
-              const formattedDate = new Date(account.planExpiresAt).toLocaleDateString('bn-BD');
-              sendSubscriptionExpirationAlert(account, daysRemaining, formattedDate);
-              account.lastExpAlertAt = now;
-              accountsModified = true;
-            }
-          }
-        } else if (account.planExpiresAt < now) {
-          console.log(`[EXPIRED PLAN] Account ${account.email} has expired. Downgrading to Free plan.`);
-          account.plan = 'free';
-          account.maxBots = 1;
-          account.planExpiresAt = null;
-          accountsModified = true;
-
-          // Send expired alert
-          sendEmailAlert({
-            to: account.email,
-            userId: account.id,
-            type: 'plan_expired',
-            subject: '⚠️ আপনার Bot-Host পেইড প্লানের মেয়াদ সমাপ্ত হয়েছে',
-            html: `<p>প্রিয় ${account.name || 'গ্রাহক'}, আপনার পেইড প্যাকেজের মেয়াদ শেষ হয়েছে। একাউন্ট ফ্রি প্ল্যানে ডাউনগ্রেড করা হয়েছে। পুনরায় সেবা চালু রাখতে অনুগ্রহ করে ওয়ালেটে ডিপোজিট করে প্যাকেজ রিনিউ করুন।</p>`,
-            text: 'আপনার Bot-Host পেইড প্লানের মেয়াদ শেষ হয়েছে।'
-          });
-
-          // Find user's running bots and stop excess ones
-          const userBots = reg.filter((b) =>
-            b.ownerId === account.id ||
-            b.owner === account.id ||
-            (b.ownerEmail && b.ownerEmail.toLowerCase() === account.email.toLowerCase())
-          );
-
-          let activeCount = 0;
-          for (const bot of userBots) {
-            if (runningProcesses.has(bot.id)) {
-              activeCount++;
-              // If beyond 1 free bot, auto-stop excess bots
-              if (activeCount > 1) {
-                console.log(`[EXPIRED PLAN] Stopping excess bot ${bot.id} for user ${account.email}`);
-                stopBotProcess(bot.id);
-                appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার পেইড সাবস্ক্রিপশনের মেয়াদ শেষ হয়েছে। অতিরিক্ত বটটি বন্ধ করা হলো। প্ল্যান রিনিউ করুন।');
-              }
-            }
+    const result = await checkAndSendExpiringPlanAlerts(accounts, (expiredAccount) => {
+      const userBots = reg.filter((b) =>
+        b.ownerId === expiredAccount.id ||
+        b.owner === expiredAccount.id ||
+        (b.ownerEmail && b.ownerEmail.toLowerCase() === expiredAccount.email.toLowerCase())
+      );
+      let activeCount = 0;
+      for (const bot of userBots) {
+        if (runningProcesses.has(bot.id)) {
+          activeCount++;
+          if (activeCount > 1) {
+            console.log(`[EXPIRED PLAN] Stopping excess bot ${bot.id} for user ${expiredAccount.email}`);
+            stopBotProcess(bot.id);
+            appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার পেইড সাবস্ক্রিপশনের মেয়াদ শেষ হয়েছে। অতিরিক্ত বটটি বন্ধ করা হলো। প্ল্যান রিনিউ করুন।');
           }
         }
       }
-    }
+    });
 
-    if (accountsModified) {
+    if (result.modified) {
       saveAccounts(accounts);
     }
   } catch (err) {

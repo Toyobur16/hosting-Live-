@@ -1,59 +1,116 @@
 import React from 'react';
-import { Home, Store, Wallet, Heart, User } from 'lucide-react';
+import { Home, Crown, PlusCircle, Server, Wallet } from 'lucide-react';
 
 interface BottomNavBarProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
-  unreadWishlist?: number;
-  userBalance?: number;
+  lang: 'bn' | 'en';
+  botsCount?: number;
+  onDeployNewBot: () => void;
 }
 
 export function BottomNavBar({
   activeTab,
   onSelectTab,
-  unreadWishlist = 0,
-  userBalance = 0
+  lang,
+  botsCount = 0,
+  onDeployNewBot
 }: BottomNavBarProps) {
-  const tabs = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'market', label: 'Market', icon: Store },
-    { id: 'wallet', label: 'Wallet', icon: Wallet },
-    { id: 'wishlist', label: 'Wishlist', icon: Heart },
-    { id: 'profile', label: 'Profile', icon: User }
-  ];
-
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0a0f1d]/95 dark:bg-[#070b13]/95 backdrop-blur-md border-t border-[#162035] py-2 px-3 transition-colors">
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-t border-slate-200 dark:border-[#162035] py-1.5 px-3 transition-colors shadow-lg">
       <div className="max-w-md mx-auto flex items-center justify-around">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+        {/* 1. Home */}
+        <button
+          onClick={() => onSelectTab('home')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'home'
+              ? 'text-[#00a876] dark:text-[#00d293] scale-105'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Home className={`w-5 h-5 ${activeTab === 'home' ? 'stroke-[2.5]' : ''}`} />
+          <span className={`text-[10px] mt-1 font-semibold ${activeTab === 'home' ? 'font-black' : ''}`}>
+            {lang === 'bn' ? 'হোম' : 'Home'}
+          </span>
+          {activeTab === 'home' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00d293] mt-0.5"></span>
+          )}
+        </button>
 
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onSelectTab(tab.id)}
-              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer relative ${
-                isActive ? 'text-[#00d293] scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <div className="relative">
-                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5] text-[#00d293]' : ''}`} />
-                {tab.id === 'wishlist' && unreadWishlist > 0 && (
-                  <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
-                    {unreadWishlist}
-                  </span>
-                )}
-              </div>
-              <span className={`text-[11px] mt-1 font-semibold ${isActive ? 'font-black text-[#00d293]' : ''}`}>
-                {tab.label}
+        {/* 2. Plans (Replaced Market) */}
+        <button
+          onClick={() => onSelectTab('plans')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'plans'
+              ? 'text-amber-500 dark:text-amber-400 scale-105'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Crown className={`w-5 h-5 ${activeTab === 'plans' ? 'stroke-[2.5]' : ''}`} />
+          <span className={`text-[10px] mt-1 font-semibold ${activeTab === 'plans' ? 'font-black' : ''}`}>
+            {lang === 'bn' ? 'প্ল্যানস' : 'Plans'}
+          </span>
+          {activeTab === 'plans' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-0.5"></span>
+          )}
+        </button>
+
+        {/* 3. Center Action: Deploy New Bot (Replaced Wishlist) */}
+        <button
+          onClick={onDeployNewBot}
+          className="flex flex-col items-center justify-center -mt-4 p-1.5 cursor-pointer group"
+          title={lang === 'bn' ? 'নতুন বট ডিপ্লয় করুন' : 'Deploy New Bot'}
+        >
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#00d293] to-emerald-400 text-slate-950 flex items-center justify-center shadow-lg shadow-[#00d293]/30 group-hover:scale-110 transition-transform">
+            <PlusCircle className="w-6 h-6 stroke-[2.5]" />
+          </div>
+          <span className="text-[10px] font-black text-[#00a876] dark:text-[#00d293] mt-1">
+            {lang === 'bn' ? 'ডিপ্লয় বট' : 'Deploy'}
+          </span>
+        </button>
+
+        {/* 4. My Bots (Replaced Downloads) */}
+        <button
+          onClick={() => onSelectTab('bots')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'bots' || activeTab === 'terminal'
+              ? 'text-sky-500 dark:text-sky-400 scale-105'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <div className="relative">
+            <Server className={`w-5 h-5 ${activeTab === 'bots' || activeTab === 'terminal' ? 'stroke-[2.5]' : ''}`} />
+            {botsCount > 0 && (
+              <span className="absolute -top-1 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-sky-500 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                {botsCount}
               </span>
-              {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00d293] mt-0.5"></span>
-              )}
-            </button>
-          );
-        })}
+            )}
+          </div>
+          <span className={`text-[10px] mt-1 font-semibold ${activeTab === 'bots' || activeTab === 'terminal' ? 'font-black' : ''}`}>
+            {lang === 'bn' ? 'আমার বট' : 'My Bots'}
+          </span>
+          {(activeTab === 'bots' || activeTab === 'terminal') && (
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-0.5"></span>
+          )}
+        </button>
+
+        {/* 5. Wallet */}
+        <button
+          onClick={() => onSelectTab('wallet')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'wallet'
+              ? 'text-[#00a876] dark:text-[#00d293] scale-105'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Wallet className={`w-5 h-5 ${activeTab === 'wallet' ? 'stroke-[2.5]' : ''}`} />
+          <span className={`text-[10px] mt-1 font-semibold ${activeTab === 'wallet' ? 'font-black' : ''}`}>
+            {lang === 'bn' ? 'ওয়ালেট' : 'Wallet'}
+          </span>
+          {activeTab === 'wallet' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00d293] mt-0.5"></span>
+          )}
+        </button>
       </div>
     </div>
   );

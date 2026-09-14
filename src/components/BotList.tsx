@@ -118,15 +118,15 @@ export const BotList: React.FC<BotListProps> = ({
         {hasActivePlan ? (
           <button
             onClick={onOpenNewBotModal}
-            className="px-4 py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold shadow-sm shadow-[#0088cc]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="px-5 py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black shadow-md shadow-[#00d293]/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>{lang === 'bn' ? '+ নতুন বট ডিপ্লয় করুন' : '+ Deploy New Bot'}</span>
           </button>
         ) : (
           <button
             onClick={onOpenPlans}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-xs font-black shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
             title={lang === 'bn' ? 'বট ডিপ্লয় করতে প্রথমে যেকোনো একটি প্ল্যান কিনুন' : 'Buy a plan to unlock Deploy Bot'}
           >
             <Sparkles className="w-4 h-4 text-slate-950" />

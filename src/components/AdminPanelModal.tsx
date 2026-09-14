@@ -3,13 +3,12 @@ import {
   X, ShieldCheck, Users, CheckCircle2, XCircle, Clock, Search,
   RefreshCw, Bot, CreditCard, DollarSign, Settings, AlertTriangle,
   Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert,
-  Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones
+  Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones, BellRing
 } from 'lucide-react';
 import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
-import { AdminStoreManager } from './admin/AdminStoreManager';
 import { AdminBannersManager } from './admin/AdminBannersManager';
-import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
 import { AdminSupportManager } from './admin/AdminSupportManager';
+import { AdminNoticesManager } from './admin/AdminNoticesManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -26,7 +25,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   lang,
   onBotAction
 }) => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'store' | 'banners' | 'categories' | 'support' | 'pricing' | 'payments' | 'bots'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'banners' | 'notices' | 'support' | 'payments' | 'bots'>('requests');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<{
     totalUsers: number;
@@ -461,39 +460,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('store')}
+            onClick={() => setActiveTab('pricing')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'store'
-                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
+              activeTab === 'pricing'
+                ? 'bg-amber-400 text-slate-950 font-black shadow-md'
                 : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
             }`}
           >
-            <ShoppingBag className="w-3.5 h-3.5 text-[#00d293]" />
-            <span>{lang === 'bn' ? 'স্টোর পণ্য ও ফাইল' : 'Store Products'}</span>
+            <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? 'প্যাকেজ ও মূল্য নির্ধারণ' : 'Packages & Pricing'}</span>
           </button>
 
           <button
             onClick={() => setActiveTab('banners')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'banners'
-                ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
                 : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>{lang === 'bn' ? 'ব্যানার স্লাইডার' : 'Banners'}</span>
+            <Sparkles className="w-3.5 h-3.5 text-[#00d293]" />
+            <span>{lang === 'bn' ? 'ব্যানার স্লাইডার আপলোড' : 'Banners'}</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('categories')}
+            onClick={() => setActiveTab('notices')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'categories'
-                ? 'bg-[#0088cc] text-white shadow-md'
+              activeTab === 'notices'
+                ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
                 : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
             }`}
           >
-            <Folder className="w-3.5 h-3.5" />
-            <span>{lang === 'bn' ? 'ক্যাটেগরি' : 'Categories'}</span>
+            <BellRing className="w-3.5 h-3.5 text-[#00d293]" />
+            <span>{lang === 'bn' ? 'জরুরি নোটিশ ও ব্রডকাস্ট' : 'Notices & Broadcast'}</span>
           </button>
 
           <button
@@ -505,19 +504,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             }`}
           >
             <Headphones className="w-3.5 h-3.5 text-sky-400" />
-            <span>{lang === 'bn' ? 'সাপোর্ট ইনবক্স' : 'Support Inbox'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pricing')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'pricing'
-                ? 'bg-[#0088cc] text-white shadow-md'
-                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
-            }`}
-          >
-            <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-            <span>{lang === 'bn' ? 'প্যাকেজ ও মূল্য নির্ধারণ' : 'Packages & Pricing'}</span>
+            <span>{lang === 'bn' ? 'সাপোর্ট ইনবক্স ও সেটিংস' : 'Support Inbox'}</span>
           </button>
 
           <button
@@ -1217,14 +1204,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
 
-        {/* Store Products Control Tab */}
-        {activeTab === 'store' && <AdminStoreManager />}
-
         {/* Hero Banners Control Tab */}
         {activeTab === 'banners' && <AdminBannersManager />}
 
-        {/* Categories Control Tab */}
-        {activeTab === 'categories' && <AdminCategoriesManager />}
+        {/* Notices & Broadcasts Tab */}
+        {activeTab === 'notices' && <AdminNoticesManager />}
 
         {/* Support Inbox & Settings Tab */}
         {activeTab === 'support' && <AdminSupportManager />}

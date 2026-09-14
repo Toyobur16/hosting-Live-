@@ -24,6 +24,28 @@
     ]
   },
   {
+    "id": "50_days",
+    "nameBn": "৫০ দিন স্পেশাল",
+    "nameEn": "50 Days Special",
+    "durationDays": 50,
+    "maxBots": 4,
+    "priceBdt": 230,
+    "priceUsd": 2.3,
+    "popular": false,
+    "featuresBn": [
+      "৪টি টেলিগ্রাম বট লাইভ হোস্টিং",
+      "৫০ দিন সার্বক্ষণিক নিরবচ্ছিন্ন হোস্টিং",
+      "স্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট ওয়াচডগ",
+      "লাইভ কনসোল ও রিয়েল-টাইম লগস"
+    ],
+    "featuresEn": [
+      "4 Telegram Bots Live Hosting",
+      "50 Days Continuous Dedicated Hosting",
+      "Auto Crash Restart Watchdog",
+      "Live Console & Real-time Logs"
+    ]
+  },
+  {
     "id": "3_months",
     "nameBn": "৩ মাস প্রিমিয়াম",
     "nameEn": "3 Months Plan",

@@ -2,19 +2,17 @@ import React from 'react';
 import {
   X,
   Home,
-  Store,
+  Crown,
+  PlusCircle,
+  Server,
+  Terminal,
   Wallet,
-  Heart,
-  Download,
   Headphones,
-  Bell,
   User,
   Shield,
   LogOut,
-  Terminal,
-  Crown,
   ChevronRight,
-  ExternalLink
+  Sparkles
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -29,6 +27,9 @@ interface SidebarDrawerProps {
   onLogout: () => void;
   isAdmin: boolean;
   pendingRequestsCount?: number;
+  lang: 'bn' | 'en';
+  onDeployNewBot: () => void;
+  botsCount?: number;
 }
 
 export function SidebarDrawer({
@@ -41,26 +42,76 @@ export function SidebarDrawer({
   onOpenAdminModal,
   onLogout,
   isAdmin,
-  pendingRequestsCount = 0
+  pendingRequestsCount = 0,
+  lang,
+  onDeployNewBot,
+  botsCount = 0
 }: SidebarDrawerProps) {
   if (!isOpen) return null;
 
   const getUserInitial = () => {
-    if (!user) return 'G';
+    if (!user) return 'U';
     return (user.name || user.email || 'U').charAt(0).toUpperCase();
   };
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home, badge: null },
-    { id: 'market', label: 'Marketplace', icon: Store, badge: 'Hot' },
-    { id: 'wallet', label: 'Wallet', icon: Wallet, badge: user ? `৳${user.balanceBdt || 0}` : null },
-    { id: 'wishlist', label: 'Wishlist', icon: Heart, badge: null },
-    { id: 'bots', label: 'Downloads / My Bots', icon: Download, badge: null },
-    { id: 'terminal', label: 'Live Terminal', icon: Terminal, badge: 'Live' },
-    { id: 'plans', label: 'Hosting Plans', icon: Crown, badge: 'VIP' },
-    { id: 'support', label: 'Support Center', icon: Headphones, badge: null },
-    { id: 'notifications', label: 'Notifications', icon: Bell, badge: '3' },
-    { id: 'profile', label: 'Profile', icon: User, badge: null }
+    {
+      id: 'home',
+      label: lang === 'bn' ? 'হোম পেজ' : 'Home Page',
+      icon: Home,
+      badge: null,
+      color: 'emerald'
+    },
+    {
+      id: 'plans',
+      label: lang === 'bn' ? 'হোস্টিং প্ল্যানস' : 'Hosting Plans',
+      icon: Crown,
+      badge: 'VIP',
+      color: 'amber'
+    },
+    {
+      id: 'deploy_action',
+      label: lang === 'bn' ? 'নতুন বট ডিপ্লয় করুন' : 'Deploy New Bot',
+      icon: PlusCircle,
+      badge: lang === 'bn' ? 'লাইভ' : 'Live',
+      color: 'emerald',
+      isAction: true
+    },
+    {
+      id: 'bots',
+      label: lang === 'bn' ? 'আমার বট সমূহ' : 'My Hosted Bots',
+      icon: Server,
+      badge: botsCount > 0 ? `${botsCount}` : null,
+      color: 'sky'
+    },
+    {
+      id: 'terminal',
+      label: lang === 'bn' ? 'লাইভ কনসোল টার্মিনাল' : 'Live Console Terminal',
+      icon: Terminal,
+      badge: 'Real-time',
+      color: 'slate'
+    },
+    {
+      id: 'wallet',
+      label: lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট' : 'Wallet & Deposit',
+      icon: Wallet,
+      badge: user ? `৳${user.balanceBdt || 0}` : null,
+      color: 'emerald'
+    },
+    {
+      id: 'support',
+      label: lang === 'bn' ? 'সাপোর্ট সেন্টার' : 'Support Center',
+      icon: Headphones,
+      badge: '24/7',
+      color: 'indigo'
+    },
+    {
+      id: 'profile',
+      label: lang === 'bn' ? 'ইউজার প্রোফাইল' : 'My Profile',
+      icon: User,
+      badge: null,
+      color: 'slate'
+    }
   ];
 
   return (
@@ -68,47 +119,53 @@ export function SidebarDrawer({
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="absolute inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
+        className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity"
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-xs sm:max-w-sm bg-[#0a0f1d] border-l border-[#162035] shadow-2xl flex flex-col justify-between overflow-y-auto">
+        <div className="w-screen max-w-xs sm:max-w-sm bg-white dark:bg-[#0a0f1d] border-l border-slate-200 dark:border-[#162035] shadow-2xl flex flex-col justify-between overflow-y-auto transition-colors">
           {/* Top Section */}
           <div>
             {/* Header: User card with close button */}
-            <div className="p-5 border-b border-[#162035] flex items-center justify-between">
+            <div className="p-5 border-b border-slate-200 dark:border-[#162035] flex items-center justify-between">
               {user ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-2 border-[#00d293] flex items-center justify-center text-white font-black text-lg shadow-md">
+                  <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-[#1e293b] border-2 border-[#00d293] flex items-center justify-center text-slate-900 dark:text-white font-black text-base shadow-md">
                     {getUserInitial()}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-white leading-tight">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
                       {user.name || 'User'}
                     </span>
-                    <span className="text-xs text-slate-400 truncate max-w-[160px]">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
                       {user.email}
                     </span>
-                    <span className="text-[10px] font-semibold text-[#00d293] mt-0.5">
-                      {user.plan && user.plan !== 'free' ? `Plan: ${user.plan.toUpperCase()}` : 'Free Tier'}
+                    <span className="text-[10px] font-bold text-[#00a876] dark:text-[#00d293] mt-0.5">
+                      {user.plan && user.plan !== 'free'
+                        ? `${lang === 'bn' ? 'প্ল্যান:' : 'Plan:'} ${user.plan.toUpperCase()}`
+                        : lang === 'bn'
+                        ? 'ফ্রি টিয়ার'
+                        : 'Free Starter'}
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full bg-[#111827] border border-[#1e293b] flex items-center justify-center text-slate-400">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-[#111827] border border-slate-200 dark:border-[#1e293b] flex items-center justify-center text-slate-500">
                     <User className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-white">Guest User</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {lang === 'bn' ? 'গেস্ট ইউজার' : 'Guest User'}
+                    </span>
                     <button
                       onClick={() => {
                         onClose();
                         onOpenAuthModal();
                       }}
-                      className="text-xs text-[#00d293] hover:underline font-bold text-left cursor-pointer"
+                      className="text-xs text-[#00a876] dark:text-[#00d293] hover:underline font-bold text-left cursor-pointer"
                     >
-                      Login or Register →
+                      {lang === 'bn' ? 'লগইন বা রেজিস্টার →' : 'Login / Register →'}
                     </button>
                   </div>
                 </div>
@@ -116,14 +173,14 @@ export function SidebarDrawer({
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl bg-[#111827] hover:bg-[#1f293d] border border-[#1e293b] text-slate-400 hover:text-white cursor-pointer transition-colors"
-                title="Close Menu"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-[#111827] hover:bg-slate-200 dark:hover:bg-[#1f293d] border border-slate-200 dark:border-[#1e293b] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+                title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Navigation List matching Screenshot 4 */}
+            {/* Navigation List */}
             <div className="py-3 px-3 space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -132,87 +189,89 @@ export function SidebarDrawer({
                   <button
                     key={item.id}
                     onClick={() => {
-                      onSelectTab(item.id);
                       onClose();
+                      if (item.isAction) {
+                        onDeployNewBot();
+                      } else {
+                        onSelectTab(item.id);
+                      }
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
-                        : 'text-slate-300 hover:bg-[#111827] hover:text-white'
+                        : item.isAction
+                        ? 'bg-[#00d293]/10 text-[#00a876] dark:text-[#00d293] hover:bg-[#00d293]/20 border border-[#00d293]/30'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#111827] hover:text-slate-950 dark:hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-[#00d293]'}`} />
                       <span>{item.label}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-1.5">
                       {item.badge && (
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
                             isActive
-                              ? 'bg-slate-950/20 text-slate-950'
-                              : item.badge === 'VIP'
-                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                              : item.badge === 'Live'
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-[#111827] text-slate-300 border border-[#1e293b]'
+                              ? 'bg-slate-950 text-white'
+                              : 'bg-slate-200 dark:bg-[#1c273e] text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {item.badge}
                         </span>
                       )}
-                      <ChevronRight className={`w-3.5 h-3.5 opacity-60 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                      <ChevronRight className="w-3.5 h-3.5 opacity-50" />
                     </div>
                   </button>
                 );
               })}
-
-              {/* Admin Panel Link */}
-              {isAdmin && (
-                <button
-                  onClick={() => {
-                    onOpenAdminModal();
-                    onClose();
-                  }}
-                  className="w-full mt-2 flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-900/40 to-indigo-900/40 hover:from-purple-900/60 hover:to-indigo-900/60 border border-purple-500/30 text-purple-300 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <Shield className="w-4 h-4 text-purple-400" />
-                    <span>👑 Admin Panel</span>
-                  </div>
-                  {pendingRequestsCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse">
-                      {pendingRequestsCount} Pending
-                    </span>
-                  )}
-                </button>
-              )}
             </div>
           </div>
 
-          {/* Bottom Section: Logout */}
-          <div className="p-4 border-t border-[#162035]">
+          {/* Bottom Section: Admin Portal & Logout */}
+          <div className="p-4 border-t border-slate-200 dark:border-[#162035] space-y-2">
+            {/* Admin Management Button (Visible if user is admin) */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenAdminModal();
+                }}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-black transition-all cursor-pointer shadow-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-500" />
+                  <span>{lang === 'bn' ? 'এডমিন ম্যানেজমেন্ট প্যানেল' : 'Admin Management Panel'}</span>
+                </div>
+                {pendingRequestsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                    {pendingRequestsCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {user ? (
               <button
                 onClick={() => {
-                  onLogout();
                   onClose();
+                  onLogout();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 text-xs font-bold cursor-pointer transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout ({user.email})</span>
+                <span>{lang === 'bn' ? 'লগআউট করুন' : 'Sign Out'}</span>
               </button>
             ) : (
               <button
                 onClick={() => {
-                  onOpenAuthModal();
                   onClose();
+                  onOpenAuthModal();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black cursor-pointer transition-colors shadow-md"
+                className="w-full py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer"
               >
-                <User className="w-4 h-4" />
-                <span>Login / Register</span>
+                {lang === 'bn' ? 'একাউন্টে লগইন করুন' : 'Log In / Register'}
               </button>
             )}
           </div>

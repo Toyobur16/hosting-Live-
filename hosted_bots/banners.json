@@ -1,0 +1,38 @@
+[
+  {
+    "id": "banner_1",
+    "title": "hosting-Live Fast — 24/7 Superfast Cloud Hosting",
+    "titleBn": "hosting-Live Fast — ২৪/৭ সুপারফাস্ট ক্লাউড বট হোস্টিং",
+    "subtitle": "Deploy and run Python Telegram Bots and Web Apps without downtime",
+    "subtitleBn": "টেলিগ্রাম বট ও পাইথন স্ক্রিপ্ট যেকোনো সময় ইনস্ট্যান্ট ডিপ্লয় করুন ও ২৪/৭ লাইভ রাখুন",
+    "badge": "লাইভ হোস্টিং",
+    "imageUrl": "https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?auto=format&fit=crop&w=1200&q=80",
+    "link": "plans",
+    "active": true,
+    "order": 1
+  },
+  {
+    "id": "banner_2",
+    "title": "Affordable Hosting Plans & Dedicated Uptime",
+    "titleBn": "সাশ্রয়ী হোস্টিং প্যাকেজ ও আনলিমিটেড সময় লাইভ",
+    "subtitle": "Choose from 30 days, 50 days, 1 year or custom plans with full console logs",
+    "subtitleBn": "৩০ দিন, ৫০ দিন, ১ বছর মেয়াদ সহ আপনার পছন্দমত প্ল্যান বেছে নিন এবং লাইভ কনসোল উপভোগ করুন",
+    "badge": "VIP প্ল্যানস",
+    "imageUrl": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+    "link": "plans",
+    "active": true,
+    "order": 2
+  },
+  {
+    "id": "banner_3",
+    "title": "Instant Binance Pay / UID Deposit System",
+    "titleBn": "বাইনান্স ইনস্ট্যান্ট ওয়ালেট ডিপোজিট সুবিধা",
+    "subtitle": "Send USDT via Binance UID and submit your Order ID for rapid approval",
+    "subtitleBn": "Binance Pay ID / UID দিয়ে সেন্ড করে অর্ডার আইডি সাবমিট করলেই দ্রুত ব্যালেন্স যুক্ত হবে",
+    "badge": "ইনস্ট্যান্ট পেমেন্ট",
+    "imageUrl": "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&w=1200&q=80",
+    "link": "wallet",
+    "active": true,
+    "order": 3
+  }
+]

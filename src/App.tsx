@@ -18,6 +18,7 @@ import { AuthModal } from './components/AuthModal';
 import { TokenCheckModal } from './components/TokenCheckModal';
 import { SafeUploadModal } from './components/SafeUploadModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
+import { NotificationsModal } from './components/NotificationsModal';
 import { HostedBot, LogEntry, AuthUser } from './types';
 
 export default function App() {
@@ -363,18 +364,53 @@ export default function App() {
 
   const selectedBot = bots.find((b) => b.id === selectedBotId);
 
+  // Plan-Gated Deployment Handler requested by user:
+  // "Deploy New Bot এই বটম অ্যাড করবেন যখন ইউজার প্লান কিনবে প্ল্যানটি কিনবে তখন এই অটোমে ক্লিক করলে হোস্টিং এর সিস্টেম টা আসবে এবং ইউজার যদি প্ল্যান না কিনে তাহলে সেটি আসবেনা এটাতে ক্লিক করলে প্ল্যান কিনার জন্য অপশনে নিয়ে যাবে"
+  const handleDeployNewBot = () => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      setToastMessage(
+        lang === 'bn'
+          ? 'বট ডিপ্লয় করতে প্রথমে আপনার একাউন্টে লগইন করুন।'
+          : 'Please log in to your account first to deploy bots.'
+      );
+      return;
+    }
+    if (!hasActivePlan) {
+      setActiveTab('plans');
+      setToastMessage(
+        lang === 'bn'
+          ? '⚠️ আপনার কোনো সক্রিয় হোস্টিং প্ল্যান নেই। নতুন বট ডিপ্লয় করতে প্রথমে যেকোনো একটি প্ল্যান কিনুন।'
+          : '⚠️ You do not have an active hosting plan. Please purchase a plan first to deploy bots.'
+      );
+      return;
+    }
+    setShowNewBotModal(true);
+  };
+
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col selection:bg-[#00d293] selection:text-slate-950 pb-20 sm:pb-8">
       {/* Top App Store Header */}
       <AppStoreHeader
         user={currentUser}
         activeTab={activeTab}
-        onSelectTab={(tab) => setActiveTab(tab as any)}
+        onSelectTab={(tab) => {
+          if (tab === 'deploy') {
+            handleDeployNewBot();
+          } else {
+            setActiveTab(tab as any);
+          }
+        }}
         onOpenSidebar={() => setIsSidebarOpen(true)}
         onOpenAuthModal={() => setShowAuthModal(true)}
         onOpenNotifications={() => setShowNotificationsModal(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        lang={lang}
+        onToggleLang={() => setLang((prev) => (prev === 'bn' ? 'en' : 'bn'))}
+        onDeployNewBot={handleDeployNewBot}
+        hasActivePlan={hasActivePlan}
+        botsCount={bots.length}
         pendingCount={pendingRequestsCount}
       />
 
@@ -383,13 +419,22 @@ export default function App() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         activeTab={activeTab}
-        onSelectTab={(tab) => setActiveTab(tab as any)}
+        onSelectTab={(tab) => {
+          if (tab === 'deploy') {
+            handleDeployNewBot();
+          } else {
+            setActiveTab(tab as any);
+          }
+        }}
         user={currentUser}
         onOpenAuthModal={() => setShowAuthModal(true)}
         onOpenAdminModal={() => setShowAdminModal(true)}
         onLogout={handleLogout}
         isAdmin={isAdmin}
         pendingRequestsCount={pendingRequestsCount}
+        lang={lang}
+        onDeployNewBot={handleDeployNewBot}
+        botsCount={bots.length}
       />
 
       {/* Main Page Content */}
@@ -414,13 +459,15 @@ export default function App() {
           <StoreHomePage
             user={currentUser}
             onNavigateToWallet={() => setActiveTab('wallet')}
-            onNavigateToMarket={() => setActiveTab('market')}
             onNavigateToPlans={() => setActiveTab('plans')}
+            onNavigateToBots={() => setActiveTab('bots')}
+            onDeployNewBot={handleDeployNewBot}
+            onNavigateToSupport={() => setActiveTab('support')}
             onOpenAuthModal={() => setShowAuthModal(true)}
             onOpenAdminModal={() => setShowAdminModal(true)}
-            onItemPurchased={() => checkAuth()}
-            wishlistIds={wishlistIds}
-            onToggleWishlist={handleToggleWishlist}
+            hasActivePlan={hasActivePlan}
+            lang={lang}
+            botsCount={bots.length}
           />
         )}
 
@@ -517,14 +564,7 @@ export default function App() {
               onStopBot={handleStopBot}
               onRestartBot={handleRestartBot}
               onDeleteBot={handleDeleteBot}
-              onOpenNewBotModal={() => {
-                if (!hasActivePlan) {
-                  setActiveTab('plans');
-                  setToastMessage('বট ডিপ্লয় করতে হলে প্রথমে যেকোনো একটি হোস্টিং প্লান কিনুন।');
-                  return;
-                }
-                setShowNewBotModal(true);
-              }}
+              onOpenNewBotModal={handleDeployNewBot}
               onOpenFileEditor={(botId) => {
                 setSelectedBotId(botId);
                 setSettingsInitialTab('files');
@@ -560,9 +600,16 @@ export default function App() {
       {/* Bottom Navigation Bar */}
       <BottomNavBar
         activeTab={activeTab}
-        onSelectTab={(tab) => setActiveTab(tab as any)}
-        unreadWishlist={wishlistIds.length}
-        userBalance={currentUser?.balanceUsd || 0}
+        onSelectTab={(tab) => {
+          if (tab === 'deploy') {
+            handleDeployNewBot();
+          } else {
+            setActiveTab(tab as any);
+          }
+        }}
+        lang={lang}
+        botsCount={bots.length}
+        onDeployNewBot={handleDeployNewBot}
       />
 
       {/* Modals */}
@@ -665,60 +712,12 @@ export default function App() {
 
       {/* Notifications Modal */}
       {showNotificationsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-[#0d1527] border border-[#1e2d48] p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#1e2d48]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#00d293]/10 text-[#00d293] flex items-center justify-center">
-                  <Bell className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white">নোটিফিকেশন সেন্টার</h3>
-                  <span className="text-[11px] text-slate-400">সর্বশেষ আপডেট ও অফার</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowNotificationsModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#162238] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
-                <span className="text-xs font-bold text-[#00d293] block">⚡ ডিপোজিট সিস্টেম আপডেট</span>
-                <p className="text-[11px] text-slate-300">
-                  বিকাশ (01614572747), নগদ (01304104492) এবং Binance Pay (922593999) এর মাধ্যমে ইনস্ট্যান্ট ডিপোজিট সুবিধা চালু রয়েছে।
-                </p>
-                <span className="text-[10px] text-slate-500 block pt-1">১ ঘণ্টা আগে</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
-                <span className="text-xs font-bold text-amber-400 block">🛍️ নতুন টেলিগ্রাম মিনি অ্যাপ ফাইল</span>
-                <p className="text-[11px] text-slate-300">
-                  স্টোরে নতুন ২০২৬ এর ভিআইপি ফাইল ও সোর্স কোড যুক্ত হয়েছে। মাত্র ২৫০ টাকায় ডাউনলোড করুন।
-                </p>
-                <span className="text-[10px] text-slate-500 block pt-1">৩ ঘণ্টা আগে</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#111c33] border border-[#1e2d48] space-y-1">
-                <span className="text-xs font-bold text-sky-400 block">🤖 ক্লাউড হোস্টিং ২৪/৭ অ্যাক্টিভ</span>
-                <p className="text-[11px] text-slate-300">
-                  আপনার ডিপ্লয় করা টেলিগ্রাম বটসমূহ বিরতিহীনভাবে ক্লাউড সার্ভারে সচল থাকবে।
-                </p>
-                <span className="text-[10px] text-slate-500 block pt-1">১ দিন আগে</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowNotificationsModal(false)}
-              className="w-full py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs cursor-pointer"
-            >
-              ঠিক আছে (Close)
-            </button>
-          </div>
-        </div>
+        <NotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          currentUser={currentUser}
+          lang={lang}
+        />
       )}
     </div>
   );

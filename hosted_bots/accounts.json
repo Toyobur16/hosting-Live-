@@ -3,6 +3,20 @@
     "id": "toyobur",
     "email": "toyobur@telegram.bot",
     "name": "Toyobur Rahman",
-    "role": "admin"
+    "role": "admin",
+    "maxBots": 999,
+    "plan": "admin_unlimited",
+    "balanceBdt": 0,
+    "balanceUsd": 0
+  },
+  {
+    "id": "user_1789353285319_jos3",
+    "name": "toyoburrahman560",
+    "email": "toyoburrahman560@gmail.com",
+    "role": "user",
+    "plan": "none",
+    "maxBots": 0,
+    "balanceBdt": 0,
+    "balanceUsd": 0
   }
 ]

@@ -165,6 +165,13 @@ export interface PaymentSettings {
   instructionsEn?: string;
 }
 
+export interface SiteSettings {
+  siteName: string;
+  logoUrl?: string;
+  taglineBn?: string;
+  taglineEn?: string;
+}
+
 export interface HostedBot {
   id: string;
   name: string;
