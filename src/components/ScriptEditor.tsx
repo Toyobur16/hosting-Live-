@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileCode, Save, Upload, RotateCw, CheckCircle2, AlertCircle, FileText, Plus, Trash2, FolderOpen, AlertTriangle } from 'lucide-react';
+import { FileCode, Save, Upload, RotateCw, CheckCircle2, AlertCircle, FileText, Plus, Trash2, FolderOpen, AlertTriangle, Download } from 'lucide-react';
 
 interface FileDetail {
   name: string;
@@ -240,6 +240,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({ lang, botId, botName
     }
   };
 
+  const handleDownloadZip = () => {
+    if (!botId) return;
+    const token = localStorage.getItem('bot_auth_token') || '';
+    window.open(`/api/bots/${botId}/export/zip?token=${encodeURIComponent(token)}`, '_blank');
+  };
+
   const handleCreateNewFile = async () => {
     if (!newFileName.trim()) return;
     const safe = newFileName.trim();
@@ -388,6 +394,16 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({ lang, botId, botName
                     className="hidden"
                   />
                 </label>
+                {botId && (
+                  <button
+                    onClick={handleDownloadZip}
+                    className="px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title={lang === 'bn' ? 'সম্পূর্ণ বট প্রজেক্ট জিপ হিসেবে ডাউনলোড / স্টক করে রাখুন' : 'Download and stock entire bot project as ZIP'}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{lang === 'bn' ? 'জিপ ডাউনলোড' : 'Download ZIP'}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setShowNewFileInput(!showNewFileInput)}
                   className="p-1.5 rounded-xl bg-[#f8fafc] dark:bg-[#1e293b] hover:bg-[#f1f5f9] dark:hover:bg-[#334155] text-[#64748b] dark:text-[#94a3b8] hover:text-[#1e293b] dark:hover:text-white border border-[#e2e8f0] dark:border-[#334155] cursor-pointer transition-colors"

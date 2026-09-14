@@ -612,6 +612,25 @@ function isUserAdmin(user: any): boolean {
   return false;
 }
 
+// Strict ownership verification: Only bot owner or admin can view, access, or edit bot files
+function canUserAccessBot(bot: any, user: any): boolean {
+  if (!user || !bot) return false;
+  if (isUserAdmin(user)) return true;
+
+  const userId = String(user.id || '').trim();
+  const userEmail = String(user.email || '').trim().toLowerCase();
+
+  const botOwnerId = String(bot.ownerId || '').trim();
+  const botOwner = String(bot.owner || '').trim();
+  const botOwnerEmail = String(bot.ownerEmail || '').trim().toLowerCase();
+
+  if (botOwnerId && botOwnerId === userId) return true;
+  if (botOwner && botOwner === userId) return true;
+  if (botOwnerEmail && userEmail && botOwnerEmail === userEmail) return true;
+
+  return false;
+}
+
 function generateAuthToken(user: any): string {
   const payload = {
     userId: user.id,
@@ -671,11 +690,15 @@ function enrichUserWithPlanAndRole(user: any): any {
   return user;
 }
 
-// Auth Middleware (Token based with 30-day session persistence)
+// Auth Middleware (Token based with 30-day session persistence, supporting Header and Query Token)
 function getAuthUser(req: express.Request): any | null {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.split(' ')[1];
+  let token = '';
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
   if (!token) return null;
 
   const sessions = getSessions();
@@ -964,13 +987,47 @@ function stopBotProcess(botId: string): boolean {
 // Watchdog service: runs every 10 seconds to ensure 24/7 stability and auto-restart
 setInterval(() => {
   const reg = getRegistry();
+  const accounts = getAccounts();
+  let registryChanged = false;
+
   for (const bot of reg) {
+    const owner = accounts.find(
+      (a) =>
+        a.id === bot.ownerId ||
+        a.id === bot.owner ||
+        (bot.ownerEmail && a.email.toLowerCase() === bot.ownerEmail.toLowerCase())
+    );
+
+    // Plan Expiry Enforcement: If owner's plan is expired or inactive, IMMEDIATELY halt live running bot
+    if (owner && owner.role !== 'admin') {
+      const isExpired = Boolean(owner.planExpiresAt && owner.planExpiresAt < Date.now());
+      const hasNoActivePlan = !owner.plan || owner.plan === 'none' || owner.plan === 'expired';
+
+      if (isExpired || hasNoActivePlan) {
+        if (runningProcesses.has(bot.id) || bot.status === 'running' || bot.autoRestart) {
+          console.log(`[WATCHDOG PLAN EXPIRED] Stopping live bot "${bot.name || bot.id}" for user "${owner.email}" - plan expired.`);
+          stopBotProcess(bot.id);
+          bot.autoRestart = false;
+          bot.status = 'stopped';
+          bot.pid = null;
+          appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার সাবস্ক্রিপশন প্যাকেজের মেয়াদ শেষ হয়ে গেছে। ফলে বটটি লাইভ থাকা বন্ধ করা হয়েছে। পুনরায় লাইভ করতে দয়া করে প্যাকেজ রিনিউ করুন।');
+          registryChanged = true;
+        }
+        continue;
+      }
+    }
+
+    // Normal auto-restart watchdog for bots with active plans
     if (bot.autoRestart && bot.status === 'running') {
       if (!runningProcesses.has(bot.id)) {
         appendLog(bot.id, 'info', '24/7 Watchdog: Process died or container restarted. Auto-restarting bot...');
         launchBotProcess(bot);
       }
     }
+  }
+
+  if (registryChanged) {
+    saveRegistry(reg);
   }
 }, 10000);
 
@@ -2564,11 +2621,20 @@ app.get('/api/admin/all-bots', (req, res) => {
   res.json({ bots: enriched });
 });
 
-// 2. Bot management
+// 2. Bot management (Strict User Isolation: Each user only sees their own bots)
 app.get('/api/bots', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    // Unauthenticated visitors do not see any user's hosted bots
+    return res.json({ bots: [] });
+  }
+
   const reg = getRegistry();
+  // Admins see all bots, normal users ONLY see bots they own
+  const userBots = isUserAdmin(user) ? reg : reg.filter((b) => canUserAccessBot(b, user));
+
   // enrich with runtime status, accurate uptimeSeconds, and fileCount
-  const enriched = reg.map((b) => {
+  const enriched = userBots.map((b) => {
     const isRunning = runningProcesses.has(b.id);
     const botDir = path.join(HOSTED_BOTS_DIR, b.dirName || b.id);
     let fileCount = 1;
@@ -2802,6 +2868,10 @@ app.post('/api/bots/:id/start', (req, res) => {
   }
 
   const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'এই বট চালু করার অনুমতি আপনার নেই (Access Denied: You do not own this bot)' });
+  }
+
   if (user && user.role !== 'admin') {
     const maxAllowed = user.maxBots || 1;
     // Check if user's paid plan is expired
@@ -2815,7 +2885,7 @@ app.post('/api/bots/:id/start', (req, res) => {
     // Count how many other bots belonging to this user are currently running
     const userRunningBots = reg.filter((b) =>
       b.id !== id &&
-      (b.ownerId === user.id || b.owner === user.id || (b.ownerEmail && b.ownerEmail.toLowerCase() === user.email.toLowerCase())) &&
+      canUserAccessBot(b, user) &&
       runningProcesses.has(b.id)
     );
 
@@ -2835,7 +2905,20 @@ app.post('/api/bots/:id/start', (req, res) => {
 
 app.post('/api/bots/:id/stop', (req, res) => {
   const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'এই বট বন্ধ করার অনুমতি আপনার নেই (Access Denied: You do not own this bot)' });
+  }
+
   const stopped = stopBotProcess(id);
+  bot.autoRestart = false;
+  saveRegistry(reg);
   res.json({ success: stopped });
 });
 
@@ -2845,6 +2928,26 @@ app.post('/api/bots/:id/restart', (req, res) => {
   const bot = reg.find((b) => b.id === id);
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'এই বট রিস্টার্ট করার অনুমতি আপনার নেই (Access Denied: You do not own this bot)' });
+  }
+
+  if (user && user.role !== 'admin') {
+    if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
+      return res.status(403).json({
+        error: 'আপনার প্যাকেজের মেয়াদ শেষ হয়ে গেছে। বট পুনরায় চালু করতে দয়া করে প্যাকেজ রিনিউ করুন।',
+        planExpired: true
+      });
+    }
+    if (!user.plan || user.plan === 'none' || user.plan === 'expired') {
+      return res.status(403).json({
+        error: 'বট লাইভ রাখতে একটি সক্রিয় প্যাকেজ প্রয়োজন। দয়া করে প্যাকেজ কিনুন।',
+        planRequired: true
+      });
+    }
   }
 
   bot.autoRestart = true;
@@ -2858,20 +2961,26 @@ app.post('/api/bots/:id/restart', (req, res) => {
 
 app.delete('/api/bots/:id', (req, res) => {
   const { id } = req.params;
-  stopBotProcess(id);
-
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'এই বট ডিলিট করার অনুমতি আপনার নেই (Access Denied: You do not own this bot)' });
+  }
+
+  stopBotProcess(id);
   const updatedReg = reg.filter((b) => b.id !== id);
   saveRegistry(updatedReg);
 
-  if (bot) {
-    const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
-    try {
-      fs.rmSync(botDir, { recursive: true, force: true });
-    } catch {
-      // Ignore
-    }
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  try {
+    fs.rmSync(botDir, { recursive: true, force: true });
+  } catch {
+    // Ignore
   }
 
   botLogs.delete(id);
@@ -2881,20 +2990,39 @@ app.delete('/api/bots/:id', (req, res) => {
 // 3. Bot logs
 app.get('/api/bots/:id/logs', (req, res) => {
   const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'লগ দেখার অনুমতি আপনার নেই (Access Denied: Only bot owner can view logs)' });
+  }
+
   const logs = botLogs.get(id) || [];
   res.json({ logs });
 });
 
 app.delete('/api/bots/:id/logs', (req, res) => {
   const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) {
+    return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'লগ মোছার অনুমতি আপনার নেই (Access Denied: Only bot owner can clear logs)' });
+  }
+
   botLogs.set(id, []);
   try {
-    const bot = getRegistry().find((b) => b.id === id);
-    if (bot) {
-      const logFile = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, 'bot.log');
-      if (fs.existsSync(logFile)) {
-        fs.writeFileSync(logFile, '', 'utf-8');
-      }
+    const logFile = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, 'bot.log');
+    if (fs.existsSync(logFile)) {
+      fs.writeFileSync(logFile, '', 'utf-8');
     }
   } catch {
     // Ignore
@@ -2902,13 +3030,18 @@ app.delete('/api/bots/:id/logs', (req, res) => {
   res.json({ success: true });
 });
 
-// 4. File operations (Edit, List, Delete, Upload)
+// 4. File operations (Edit, List, Delete, Upload) - Strictly isolated per bot owner
 app.get('/api/bots/:id/files', (req, res) => {
   const { id } = req.params;
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) {
     return res.status(404).json({ error: 'Bot not found' });
+  }
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'বটের ফাইল দেখার অনুমতি আপনার নেই (Access Denied: Only bot owner can view files)' });
   }
 
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
@@ -2922,17 +3055,19 @@ app.get('/api/bots/:id/files', (req, res) => {
 
   for (const item of items) {
     const p = path.join(botDir, item);
-    const stat = fs.statSync(p);
-    if (stat.isFile()) {
-      files.push(item);
-      fileDetails.push({
-        name: item,
-        size: stat.size,
-        modified: stat.mtime.toISOString(),
-        isEntry: item === bot.entryFile,
-        isEditable: item.endsWith('.py') || item.endsWith('.json') || item.endsWith('.txt') || item.endsWith('.env') || item.endsWith('.md')
-      });
-    }
+    try {
+      const stat = fs.statSync(p);
+      if (stat.isFile()) {
+        files.push(item);
+        fileDetails.push({
+          name: item,
+          size: stat.size,
+          modified: stat.mtime.toISOString(),
+          isEntry: item === bot.entryFile,
+          isEditable: item.endsWith('.py') || item.endsWith('.json') || item.endsWith('.txt') || item.endsWith('.env') || item.endsWith('.md')
+        });
+      }
+    } catch {}
   }
 
   res.json({ files, fileDetails });
@@ -2946,6 +3081,11 @@ app.get('/api/bots/:id/file', (req, res) => {
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'এই ফাইল পড়ার অনুমতি আপনার নেই (Access Denied: Only bot owner can view files)' });
+  }
 
   const safeFilename = path.basename(filename);
   const filePath = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, safeFilename);
@@ -2972,6 +3112,11 @@ app.post('/api/bots/:id/file', (req, res) => {
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ফাইল পরিবর্তন করার অনুমতি আপনার নেই (Access Denied: Only bot owner can edit files)' });
+  }
 
   const safeFilename = path.basename(filename);
   const filePath = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, safeFilename);
@@ -3002,6 +3147,11 @@ app.post('/api/bots/:id/delete-file', (req, res) => {
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ফাইল ডিলিট করার অনুমতি আপনার নেই (Access Denied: Only bot owner can delete files)' });
+  }
+
   const safeFilename = path.basename(filename);
   const filePath = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id, safeFilename);
 
@@ -3026,6 +3176,11 @@ app.post('/api/bots/:id/upload-files', (req, res) => {
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ফাইল আপলোড করার অনুমতি আপনার নেই (Access Denied: Only bot owner can upload files)' });
+  }
 
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
   for (const f of files) {
@@ -3058,6 +3213,11 @@ app.post('/api/bots/:id/upload-zip', (req, res) => {
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'জিপ আপলোড করার অনুমতি আপনার নেই (Access Denied: Only bot owner can upload zip)' });
+  }
+
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
   const zipPath = path.join(botDir, `upload_${Date.now()}.zip`);
   fs.writeFileSync(zipPath, Buffer.from(zipBase64, 'base64'));
@@ -3078,6 +3238,35 @@ app.post('/api/bots/:id/upload-zip', (req, res) => {
   });
 });
 
+// Secure Bot Workspace Zip Download (Strictly only owner or admin can download files)
+app.get(['/api/bots/:id/export/zip', '/api/bots/:id/download'], (req, res) => {
+  const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ফাইল ডাউনলোড করার অনুমতি আপনার নেই (Access Denied: Only bot owner can download files)' });
+  }
+
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  if (!fs.existsSync(botDir)) {
+    return res.status(404).json({ error: 'Bot directory not found' });
+  }
+
+  const tempZipPath = path.join('/tmp', `bot_${bot.id}_${Date.now()}.zip`);
+  exec(`cd "${botDir}" && python3 -m zipfile -c "${tempZipPath}" .`, (err) => {
+    if (err || !fs.existsSync(tempZipPath)) {
+      return res.status(500).json({ error: 'Failed to create zip file' });
+    }
+    const downloadName = `${(bot.name || 'bot').replace(/[^a-zA-Z0-9_-]/g, '_')}_workspace.zip`;
+    res.download(tempZipPath, downloadName, () => {
+      try { fs.unlinkSync(tempZipPath); } catch {}
+    });
+  });
+});
+
 // Safe File Update with 100% User Balance & Database Protection
 app.post('/api/bots/:id/safe-update', (req, res) => {
   const { id } = req.params;
@@ -3086,6 +3275,11 @@ app.post('/api/bots/:id/safe-update', (req, res) => {
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'বট আপডেট করার অনুমতি আপনার নেই (Access Denied: You do not own this bot)' });
+  }
 
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
   if (!fs.existsSync(botDir)) {
@@ -3255,6 +3449,11 @@ app.post('/api/bots/:id/database/auto-connect', (req, res) => {
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ডাটাবেজ কানেক্ট করার অনুমতি আপনার নেই (Access Denied: Only bot owner can manage databases)' });
+  }
+
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
   if (!fs.existsSync(botDir)) {
     fs.mkdirSync(botDir, { recursive: true });
@@ -3321,6 +3520,11 @@ app.get('/api/bots/:id/database/stats', (req, res) => {
   const reg = getRegistry();
   const bot = reg.find((b) => b.id === id);
   if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (!user || !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ডাটাবেজ স্ট্যাটস দেখার অনুমতি আপনার নেই (Access Denied: Only bot owner can view database stats)' });
+  }
 
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
   let usersCount = 0;
@@ -3424,15 +3628,19 @@ app.post('/api/pip/install', (req, res) => {
   });
 });
 
-// 7. Services & SMS Manager for Bot
-function resolveBotDirectory(botIdQuery?: any): { bot: any; botDir: string } | null {
+// 7. Services & SMS Manager for Bot (Strict User Isolation)
+function resolveBotDirectoryForUser(user: any, botIdQuery?: any): { bot: any; botDir: string } | null {
+  if (!user) return null;
   const reg = getRegistry();
+  const accessibleBots = isUserAdmin(user) ? reg : reg.filter((b) => canUserAccessBot(b, user));
+  if (accessibleBots.length === 0) return null;
+
   let bot = null;
   if (botIdQuery) {
-    bot = reg.find((b) => b.id === botIdQuery || b.dirName === botIdQuery);
+    bot = accessibleBots.find((b) => b.id === botIdQuery || b.dirName === botIdQuery);
   }
-  if (!bot && reg.length > 0) {
-    bot = reg[0];
+  if (!bot && accessibleBots.length > 0) {
+    bot = accessibleBots[0];
   }
   if (!bot) return null;
   const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
@@ -3442,10 +3650,13 @@ function resolveBotDirectory(botIdQuery?: any): { bot: any; botDir: string } | n
   return { bot, botDir };
 }
 
-// Global & Per-Bot Services endpoints
+// Global & Per-Bot Services endpoints (Isolated per bot owner)
 app.get(['/api/services', '/api/bots/:id/services'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized', services: [] });
+
   const botId = req.params.id || req.query.botId;
-  const resolved = resolveBotDirectory(botId);
+  const resolved = resolveBotDirectoryForUser(user, botId);
   if (!resolved) return res.json({ services: [] });
 
   const servicesPath = path.join(resolved.botDir, 'custom_services.json');
@@ -3461,9 +3672,12 @@ app.get(['/api/services', '/api/bots/:id/services'], (req, res) => {
 });
 
 app.post(['/api/services', '/api/bots/:id/services'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
   const botId = req.params.id || req.query.botId || req.body.botId;
-  const resolved = resolveBotDirectory(botId);
-  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found or access denied' });
 
   const { services } = req.body;
   const servicesPath = path.join(resolved.botDir, 'custom_services.json');
@@ -3477,9 +3691,12 @@ app.post(['/api/services', '/api/bots/:id/services'], (req, res) => {
 });
 
 app.post(['/api/services/clear', '/api/bots/:id/services/clear'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
   const botId = req.params.id || req.query.botId || req.body.botId;
-  const resolved = resolveBotDirectory(botId);
-  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found or access denied' });
 
   const servicesPath = path.join(resolved.botDir, 'custom_services.json');
   try {
@@ -3492,9 +3709,12 @@ app.post(['/api/services/clear', '/api/bots/:id/services/clear'], (req, res) => 
 });
 
 app.post(['/api/services/reset-default', '/api/bots/:id/services/reset-default'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
   const botId = req.params.id || req.query.botId || req.body.botId;
-  const resolved = resolveBotDirectory(botId);
-  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found or access denied' });
 
   const defaultServices = [
     { sid: 'TELEGRAM', ranges: [{ range: 'GLOBAL', country: 'International' }] },
@@ -3518,10 +3738,13 @@ app.post(['/api/services/reset-default', '/api/bots/:id/services/reset-default']
   }
 });
 
-// SMS Gateway Config endpoints
+// SMS Gateway Config endpoints (Strictly per user bot)
 app.get(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized', baseUrl: 'https://minosms.com', apiKey: '', token: '' });
+
   const botId = req.params.id || req.query.botId;
-  const resolved = resolveBotDirectory(botId);
+  const resolved = resolveBotDirectoryForUser(user, botId);
   if (!resolved) return res.json({ baseUrl: 'https://minosms.com', apiKey: '', token: '' });
 
   const configPath = path.join(resolved.botDir, 'sms_config.json');
@@ -3545,9 +3768,12 @@ app.get(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
 });
 
 app.post(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
   const botId = req.params.id || req.body.botId;
-  const resolved = resolveBotDirectory(botId);
-  if (!resolved) return res.status(404).json({ error: 'No bot found' });
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found or access denied' });
 
   const { baseUrl, apiKey, token } = req.body;
   const config = {
@@ -3592,17 +3818,25 @@ app.post(['/api/sms-config', '/api/bots/:id/sms-config'], (req, res) => {
   }
 });
 
-// 8. Database & Storage Manager
+// 8. Database & Storage Manager (Per User / Per Bot)
 app.get('/api/database/backup', (req, res) => {
-  const reg = getRegistry();
-  const firstBot = reg[0];
-  const botDir = firstBot ? path.join(HOSTED_BOTS_DIR, firstBot.dirName || firstBot.id) : null;
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
+  const botId = req.query.botId as string;
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(404).json({ error: 'No bot found or access denied' });
 
   const data: Record<string, any> = {
-    registry: reg,
+    bot: {
+      id: resolved.bot.id,
+      name: resolved.bot.name,
+      ownerEmail: resolved.bot.ownerEmail
+    },
     timestamp: new Date().toISOString()
   };
 
+  const botDir = resolved.botDir;
   if (botDir && fs.existsSync(botDir)) {
     const files = ['users.json', 'custom_services.json', 'datarange.json', 'paid_sms.json', 'referral_data.json', 'withdraw_requests.json'];
     for (const f of files) {
@@ -3617,46 +3851,57 @@ app.get('/api/database/backup', (req, res) => {
     }
   }
 
+  const safeBotName = (resolved.bot.name || 'bot').replace(/[^a-zA-Z0-9_-]/g, '_');
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', 'attachment; filename="bot-backup.json"');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeBotName}-backup.json"`);
   res.send(JSON.stringify(data, null, 2));
 });
 
 app.get('/api/database/stats', (req, res) => {
+  const user = getAuthUser(req);
   const reg = getRegistry();
+  const accessibleBots = user ? (isUserAdmin(user) ? reg : reg.filter((b) => canUserAccessBot(b, user))) : [];
+
   let totalFiles = 0;
   let totalBytes = 0;
 
-  for (const b of reg) {
+  for (const b of accessibleBots) {
     const botDir = path.join(HOSTED_BOTS_DIR, b.dirName || b.id);
     if (fs.existsSync(botDir)) {
-      const files = fs.readdirSync(botDir);
-      totalFiles += files.length;
-      for (const f of files) {
-        try {
-          const s = fs.statSync(path.join(botDir, f));
-          totalBytes += s.size;
-        } catch {}
-      }
+      try {
+        const files = fs.readdirSync(botDir);
+        totalFiles += files.length;
+        for (const f of files) {
+          try {
+            const s = fs.statSync(path.join(botDir, f));
+            totalBytes += s.size;
+          } catch {}
+        }
+      } catch {}
     }
   }
 
+  const runningCount = accessibleBots.filter((b) => runningProcesses.has(b.id)).length;
+
   res.json({
-    totalBots: reg.length,
-    runningBots: runningProcesses.size,
+    totalBots: accessibleBots.length,
+    runningBots: runningCount,
     totalFiles,
     totalBytes,
     formattedSize: (totalBytes / (1024 * 1024)).toFixed(2) + ' MB'
   });
 });
 
-// 9. Users & Balances API
+// 9. Users & Balances API (Strictly scoped to user-owned bots)
 app.get('/api/users', (req, res) => {
-  const reg = getRegistry();
-  const firstBot = reg[0];
-  if (!firstBot) return res.json({ users: [] });
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized', users: [] });
 
-  const usersPath = path.join(HOSTED_BOTS_DIR, firstBot.dirName || firstBot.id, 'users.json');
+  const botId = req.query.botId as string;
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.json({ users: [] });
+
+  const usersPath = path.join(resolved.botDir, 'users.json');
   if (fs.existsSync(usersPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(usersPath, 'utf-8'));
@@ -3675,14 +3920,17 @@ app.get('/api/users', (req, res) => {
 });
 
 app.post('/api/users/:uid/balance', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(403).json({ error: 'Unauthorized' });
+
+  const botId = (req.query.botId as string) || req.body.botId;
+  const resolved = resolveBotDirectoryForUser(user, botId);
+  if (!resolved) return res.status(403).json({ error: 'No bot found or access denied' });
+
   const { uid } = req.params;
   const { amount } = req.body;
 
-  const reg = getRegistry();
-  const firstBot = reg[0];
-  if (!firstBot) return res.status(404).json({ error: 'No bot found' });
-
-  const usersPath = path.join(HOSTED_BOTS_DIR, firstBot.dirName || firstBot.id, 'users.json');
+  const usersPath = path.join(resolved.botDir, 'users.json');
   if (fs.existsSync(usersPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(usersPath, 'utf-8'));
@@ -3704,21 +3952,27 @@ setInterval(async () => {
     const reg = getRegistry();
 
     const result = await checkAndSendExpiringPlanAlerts(accounts, (expiredAccount) => {
+      if (expiredAccount.role === 'admin') return;
+
       const userBots = reg.filter((b) =>
         b.ownerId === expiredAccount.id ||
         b.owner === expiredAccount.id ||
         (b.ownerEmail && b.ownerEmail.toLowerCase() === expiredAccount.email.toLowerCase())
       );
-      let activeCount = 0;
+      let regUpdated = false;
       for (const bot of userBots) {
-        if (runningProcesses.has(bot.id)) {
-          activeCount++;
-          if (activeCount > 1) {
-            console.log(`[EXPIRED PLAN] Stopping excess bot ${bot.id} for user ${expiredAccount.email}`);
-            stopBotProcess(bot.id);
-            appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার পেইড সাবস্ক্রিপশনের মেয়াদ শেষ হয়েছে। অতিরিক্ত বটটি বন্ধ করা হলো। প্ল্যান রিনিউ করুন।');
-          }
+        if (runningProcesses.has(bot.id) || bot.status === 'running' || bot.autoRestart) {
+          console.log(`[EXPIRED PLAN] Halting live bot "${bot.name || bot.id}" for user ${expiredAccount.email}`);
+          stopBotProcess(bot.id);
+          bot.autoRestart = false;
+          bot.status = 'stopped';
+          bot.pid = null;
+          appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার সাবস্ক্রিপশন প্যাকেজের মেয়াদ শেষ হয়েছে। ফলে বটটি সম্পূর্ণ বন্ধ করা হলো। দয়া করে প্ল্যান রিনিউ করুন।');
+          regUpdated = true;
         }
+      }
+      if (regUpdated) {
+        saveRegistry(reg);
       }
     });
 
@@ -3737,7 +3991,8 @@ app.get(['/admin', '/admin/login'], (req, res) => {
 
 // Vite middleware / Static Serving
 async function start() {
-  if (process.env.NODE_ENV !== 'production') {
+  const isProd = process.env.NODE_ENV === 'production' || !fs.existsSync(path.join(process.cwd(), 'src', 'main.tsx'));
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'

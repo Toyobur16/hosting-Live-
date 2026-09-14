@@ -411,27 +411,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 bg-[#09101d] p-1 rounded-xl border border-[#1d2d47]">
             {/* Direct URL Copy Button */}
             <button
               type="button"
               onClick={() => handleCopy(adminDirectUrl, 'admin_url')}
               title={adminDirectUrl}
-              className="px-2.5 py-1.5 rounded-xl bg-[#16233b] hover:bg-[#0088cc]/30 text-slate-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer border border-[#223554] transition-all"
+              className="h-8 px-2.5 rounded-lg bg-[#121d30] hover:bg-[#0088cc]/20 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-[#223554] transition-all"
             >
               {copiedId === 'admin_url' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span className="hidden md:inline">{copiedId === 'admin_url' ? 'লিংক কপি হয়েছে!' : 'এডমিন লিংক'}</span>
+              <span className="hidden md:inline">{copiedId === 'admin_url' ? 'কপি হয়েছে' : 'এডমিন লিংক'}</span>
             </button>
 
             {/* Overview Stats Toggle */}
             <button
               type="button"
               onClick={() => setShowStatsExpanded(!showStatsExpanded)}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer border transition-all ${
+              className={`h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer border transition-all ${
                 showStatsExpanded
-                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                  : 'bg-[#16233b] border-[#223554] text-slate-300 hover:text-white'
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                  : 'bg-[#121d30] border-[#223554] text-slate-300 hover:text-white hover:bg-[#192740]'
               }`}
+              title="পরিসংখ্যান দেখুন / লুকান"
             >
               <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">পরিসংখ্যান</span>
@@ -442,18 +443,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             <button
               onClick={loadAllAdminData}
               title={lang === 'bn' ? 'ডাটা রিফ্রেশ করুন' : 'Refresh Data'}
-              className="p-1.5 sm:p-2 rounded-xl bg-[#16233b] hover:bg-[#1f3252] border border-[#223554] text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="h-8 w-8 rounded-lg bg-[#121d30] hover:bg-[#192740] border border-[#223554] text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#0088cc]' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#0088cc]' : ''}`} />
             </button>
 
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-rose-900/50 border border-transparent hover:border-rose-800 transition-colors cursor-pointer"
+              className="h-8 w-8 rounded-lg bg-[#121d30] hover:bg-rose-900/50 border border-[#223554] hover:border-rose-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               title="বন্ধ করুন"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -517,210 +518,66 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
 
-        {/* Navigation Section (Fixed / shrink-0) */}
-        <div className="shrink-0 mb-3 space-y-2">
-          {/* Mobile Quick Selector */}
-          <div className="sm:hidden flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-400 shrink-0">বিভাগ জাম্প:</span>
-            <select
-              value={activeTab}
-              onChange={(e) => handleSelectTab(e.target.value as AdminTabType)}
-              className="w-full bg-[#131d2e] border border-[#0088cc] rounded-xl px-2.5 py-1.5 text-xs font-bold text-white cursor-pointer"
-            >
-              <option value="requests">⏰ অনুরোধ ও ডিপোজিট ({overview?.pendingRequestsCount || 0} পেন্ডিং)</option>
-              <option value="users">👥 ইউজার ও ওয়ালেট</option>
-              <option value="pricing">💰 প্যাকেজ ও প্রাইসিং কন্ট্রোল</option>
-              <option value="store">🛍️ স্টোর ফাইল ও পণ্য</option>
-              <option value="categories">📁 ক্যাটাগরি সমূহ</option>
-              <option value="banners">✨ ব্যানার স্লাইডার</option>
-              <option value="notices">📢 জরুরি নোটিশ ও ব্রডকাস্ট</option>
-              <option value="support">🎧 সাপোর্ট ইনবক্স</option>
-              <option value="payments">💳 পেমেন্ট নাম্বার সেটিংস</option>
-              <option value="bots">🤖 সকল বট নিয়ন্ত্রণ</option>
-              <option value="smtp">📧 SMTP ইমেইল সেটিংস</option>
-            </select>
-          </div>
-
-          {/* Horizontal Scrollable Tabs Strip with Arrow Controls */}
-          <div className="relative flex items-center">
+        {/* Unified Tabs Navigation Bar (Fixed / shrink-0) */}
+        <div className="shrink-0 mb-3 bg-[#080e1a] p-1.5 rounded-2xl border border-[#182740]">
+          <div className="relative flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => scrollTabsNav('left')}
-              className="hidden sm:flex items-center justify-center p-1.5 rounded-lg bg-[#0e1726] border border-[#1e2d48] text-slate-400 hover:text-white mr-1 cursor-pointer shrink-0"
-              title="বামে স্ক্রোল করুন"
+              className="flex items-center justify-center w-8 h-8 rounded-xl bg-[#0f192b] hover:bg-[#18263f] border border-[#1f304d] text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 shadow-sm"
+              title={lang === 'bn' ? 'বামে স্ক্রোল করুন' : 'Scroll left'}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
             <div
               ref={tabsNavRef}
-              className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scroll-smooth no-scrollbar flex-1"
+              className="flex items-center gap-1.5 overflow-x-auto py-0.5 scroll-smooth no-scrollbar flex-1"
             >
-              {/* Tab 1: Requests */}
-              <button
-                ref={(el) => (tabButtonRefs.current['requests'] = el)}
-                onClick={() => handleSelectTab('requests')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'requests'
-                    ? 'bg-[#0088cc] border-[#00a2f5] text-white shadow-md shadow-[#0088cc]/20'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5 text-sky-300" />
-                <span>{lang === 'bn' ? 'অনুরোধ ও ডিপোজিট' : 'Requests & Deposits'}</span>
-                {overview && overview.pendingRequestsCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black animate-pulse">
-                    {overview.pendingRequestsCount}
-                  </span>
-                )}
-              </button>
+              {[
+                { id: 'requests' as AdminTabType, labelBn: 'অনুরোধ ও ডিপোজিট', labelEn: 'Requests & Deposits', icon: Clock, iconColor: 'text-sky-400', badge: overview?.pendingRequestsCount },
+                { id: 'users' as AdminTabType, labelBn: 'ইউজার ও ওয়ালেট', labelEn: 'Users & Wallets', icon: Users, iconColor: 'text-indigo-400' },
+                { id: 'pricing' as AdminTabType, labelBn: 'প্যাকেজ ও প্রাইসিং', labelEn: 'Packages & Pricing', icon: DollarSign, iconColor: 'text-amber-400' },
+                { id: 'store' as AdminTabType, labelBn: 'স্টোর ও ফাইলসমূহ', labelEn: 'Store & Files', icon: ShoppingBag, iconColor: 'text-emerald-400' },
+                { id: 'categories' as AdminTabType, labelBn: 'ক্যাটাগরি সমূহ', labelEn: 'Categories', icon: Folder, iconColor: 'text-yellow-400' },
+                { id: 'banners' as AdminTabType, labelBn: 'ব্যানার স্লাইডার', labelEn: 'Banners', icon: Sparkles, iconColor: 'text-pink-400' },
+                { id: 'notices' as AdminTabType, labelBn: 'জরুরি নোটিশ', labelEn: 'Notices', icon: BellRing, iconColor: 'text-teal-400' },
+                { id: 'support' as AdminTabType, labelBn: 'সাপোর্ট ইনবক্স', labelEn: 'Support Inbox', icon: Headphones, iconColor: 'text-cyan-400' },
+                { id: 'payments' as AdminTabType, labelBn: 'পেমেন্ট নাম্বার', labelEn: 'Payment Numbers', icon: CreditCard, iconColor: 'text-purple-400' },
+                { id: 'bots' as AdminTabType, labelBn: 'সকল বট নিয়ন্ত্রণ', labelEn: 'All Bots Control', icon: Bot, iconColor: 'text-blue-400' },
+                { id: 'smtp' as AdminTabType, labelBn: 'SMTP সেটিংস', labelEn: 'SMTP Email', icon: Mail, iconColor: 'text-orange-400' },
+              ].map((tab) => {
+                const IconComp = tab.icon;
+                const isActive = activeTab === tab.id;
 
-              {/* Tab 2: Users */}
-              <button
-                ref={(el) => (tabButtonRefs.current['users'] = el)}
-                onClick={() => handleSelectTab('users')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'users'
-                    ? 'bg-[#0088cc] border-[#00a2f5] text-white shadow-md shadow-[#0088cc]/20'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5 text-indigo-300" />
-                <span>{lang === 'bn' ? 'ইউজার ও ওয়ালেট' : 'Users & Wallets'}</span>
-              </button>
-
-              {/* Tab 3: Pricing */}
-              <button
-                ref={(el) => (tabButtonRefs.current['pricing'] = el)}
-                onClick={() => handleSelectTab('pricing')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'pricing'
-                    ? 'bg-amber-400 border-amber-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-                <span>{lang === 'bn' ? 'প্যাকেজ ও প্রাইসিং' : 'Pricing'}</span>
-              </button>
-
-              {/* Tab 4: Store */}
-              <button
-                ref={(el) => (tabButtonRefs.current['store'] = el)}
-                onClick={() => handleSelectTab('store')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'store'
-                    ? 'bg-[#00d293] border-emerald-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5 text-[#00d293]" />
-                <span>{lang === 'bn' ? 'স্টোর ও ফাইলসমূহ' : 'Store Files'}</span>
-              </button>
-
-              {/* Tab 5: Categories */}
-              <button
-                ref={(el) => (tabButtonRefs.current['categories'] = el)}
-                onClick={() => handleSelectTab('categories')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'categories'
-                    ? 'bg-[#00d293] border-emerald-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Folder className="w-3.5 h-3.5 text-amber-400" />
-                <span>{lang === 'bn' ? 'ক্যাটাগরি সমূহ' : 'Categories'}</span>
-              </button>
-
-              {/* Tab 6: Banners */}
-              <button
-                ref={(el) => (tabButtonRefs.current['banners'] = el)}
-                onClick={() => handleSelectTab('banners')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'banners'
-                    ? 'bg-[#00d293] border-emerald-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-                <span>{lang === 'bn' ? 'ব্যানার স্লাইডার' : 'Banners'}</span>
-              </button>
-
-              {/* Tab 7: Notices */}
-              <button
-                ref={(el) => (tabButtonRefs.current['notices'] = el)}
-                onClick={() => handleSelectTab('notices')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'notices'
-                    ? 'bg-[#00d293] border-emerald-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <BellRing className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{lang === 'bn' ? 'জরুরি নোটিশ' : 'Notices'}</span>
-              </button>
-
-              {/* Tab 8: Support */}
-              <button
-                ref={(el) => (tabButtonRefs.current['support'] = el)}
-                onClick={() => handleSelectTab('support')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'support'
-                    ? 'bg-[#0088cc] border-[#00a2f5] text-white shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Headphones className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{lang === 'bn' ? 'সাপোর্ট ইনবক্স' : 'Support Inbox'}</span>
-              </button>
-
-              {/* Tab 9: Payments */}
-              <button
-                ref={(el) => (tabButtonRefs.current['payments'] = el)}
-                onClick={() => handleSelectTab('payments')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'payments'
-                    ? 'bg-[#0088cc] border-[#00a2f5] text-white shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5 text-purple-400" />
-                <span>{lang === 'bn' ? 'পেমেন্ট নাম্বার' : 'Payments'}</span>
-              </button>
-
-              {/* Tab 10: Bots */}
-              <button
-                ref={(el) => (tabButtonRefs.current['bots'] = el)}
-                onClick={() => handleSelectTab('bots')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'bots'
-                    ? 'bg-[#0088cc] border-[#00a2f5] text-white shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Bot className="w-3.5 h-3.5 text-blue-400" />
-                <span>{lang === 'bn' ? 'সকল বট নিয়ন্ত্রণ' : 'All Bots'}</span>
-              </button>
-
-              {/* Tab 11: SMTP */}
-              <button
-                ref={(el) => (tabButtonRefs.current['smtp'] = el)}
-                onClick={() => handleSelectTab('smtp')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 border ${
-                  activeTab === 'smtp'
-                    ? 'bg-amber-400 border-amber-300 text-slate-950 font-black shadow-md'
-                    : 'bg-[#0d1524] border-[#1e2d48] text-slate-300 hover:text-white hover:bg-[#16233b]'
-                }`}
-              >
-                <Mail className="w-3.5 h-3.5 text-yellow-400" />
-                <span>{lang === 'bn' ? '📧 SMTP ইমেইল' : 'SMTP Email'}</span>
-              </button>
+                return (
+                  <button
+                    key={tab.id}
+                    ref={(el) => (tabButtonRefs.current[tab.id] = el)}
+                    onClick={() => handleSelectTab(tab.id)}
+                    className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer flex items-center gap-2 whitespace-nowrap shrink-0 border ${
+                      isActive
+                        ? 'bg-gradient-to-r from-[#0088cc] to-[#0072ad] border-sky-400 text-white shadow-md shadow-[#0088cc]/25'
+                        : 'bg-[#0e1728] border-[#1b2b45] text-slate-300 hover:text-white hover:bg-[#15233c] hover:border-slate-600'
+                    }`}
+                  >
+                    <IconComp className={`w-3.5 h-3.5 ${isActive ? 'text-white' : tab.iconColor}`} />
+                    <span>{lang === 'bn' ? tab.labelBn : tab.labelEn}</span>
+                    {typeof tab.badge === 'number' && tab.badge > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black animate-pulse leading-none shadow-sm">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <button
               type="button"
               onClick={() => scrollTabsNav('right')}
-              className="hidden sm:flex items-center justify-center p-1.5 rounded-lg bg-[#0e1726] border border-[#1e2d48] text-slate-400 hover:text-white ml-1 cursor-pointer shrink-0"
-              title="ডানে স্ক্রোল করুন"
+              className="flex items-center justify-center w-8 h-8 rounded-xl bg-[#0f192b] hover:bg-[#18263f] border border-[#1f304d] text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 shadow-sm"
+              title={lang === 'bn' ? 'ডানে স্ক্রোল করুন' : 'Scroll right'}
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -741,16 +598,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           {activeTab === 'requests' && (
             <div className="space-y-3 pr-1">
             {/* Filter & Search */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[#09101d] p-2 rounded-2xl border border-[#1a2942]">
+              <div className="flex items-center gap-1 bg-[#060b14] p-1 rounded-xl border border-[#16243b]">
                 {(['pending', 'approved', 'rejected', 'all'] as const).map((st) => (
                   <button
                     key={st}
                     onClick={() => setFilterStatus(st)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize cursor-pointer transition-colors ${
+                    className={`h-7 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       filterStatus === st
-                        ? 'bg-[#1f2d48] text-white border border-[#0088cc]'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-[#0088cc] text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-[#121c2e]'
                     }`}
                   >
                     {st === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
@@ -767,7 +624,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={lang === 'bn' ? 'নাম, TrxID বা নাম্বার খুঁজুন...' : 'Search Name, TrxID, Phone...'}
-                  className="bg-[#090e18] border border-[#1f2d48] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#0088cc]"
+                  className="bg-[#060b14] border border-[#16243b] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#0088cc]"
                 />
               </div>
             </div>

@@ -289,10 +289,21 @@ export default function App() {
       prev.map((b) => (b.id === botId ? { ...b, status: 'running' } : b))
     );
     try {
-      await authFetch(`/api/bots/${botId}/start`, { method: 'POST' });
+      const res = await authFetch(`/api/bots/${botId}/start`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToastMessage(data.error || (lang === 'bn' ? 'বট চালু করতে ব্যর্থ হয়েছে' : 'Failed to start bot'));
+        if (data.planExpired || data.planRequired) {
+          setActiveTab('plans');
+        }
+      } else {
+        setToastMessage(lang === 'bn' ? 'বট সফলভাবে চালু হয়েছে' : 'Bot started successfully');
+      }
       await fetchBots();
       fetchLogs(botId);
-    } catch {} finally {
+    } catch {
+      setToastMessage(lang === 'bn' ? 'নেটওয়ার্ক বা সার্ভার ত্রুটি' : 'Network or server error');
+    } finally {
       setLoading(false);
     }
   };
@@ -317,10 +328,21 @@ export default function App() {
       prev.map((b) => (b.id === botId ? { ...b, status: 'starting' } : b))
     );
     try {
-      await authFetch(`/api/bots/${botId}/restart`, { method: 'POST' });
+      const res = await authFetch(`/api/bots/${botId}/restart`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToastMessage(data.error || (lang === 'bn' ? 'বট রিস্টার্ট করতে ব্যর্থ হয়েছে' : 'Failed to restart bot'));
+        if (data.planExpired || data.planRequired) {
+          setActiveTab('plans');
+        }
+      } else {
+        setToastMessage(lang === 'bn' ? 'বট রিস্টার্ট করা হয়েছে' : 'Bot restarted successfully');
+      }
       await fetchBots();
       fetchLogs(botId);
-    } catch {} finally {
+    } catch {
+      setToastMessage(lang === 'bn' ? 'নেটওয়ার্ক বা সার্ভার ত্রুটি' : 'Network or server error');
+    } finally {
       setLoading(false);
     }
   };
