@@ -2,6 +2,16 @@ import 'dotenv/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
+import dns from 'dns';
+
+// Ensure Node defaults to IPv4 first to prevent ENETUNREACH errors on cloud containers (e.g. Render) without IPv6 routes
+if (typeof (dns as any).setDefaultResultOrder === 'function') {
+  try {
+    (dns as any).setDefaultResultOrder('ipv4first');
+  } catch (e) {
+    // Ignore if not supported
+  }
+}
 
 const NOTIFICATIONS_FILE = path.join(process.cwd(), 'hosted_bots', 'notifications.json');
 const SMTP_SETTINGS_FILE = path.join(process.cwd(), 'hosted_bots', 'smtp_settings.json');
@@ -221,14 +231,15 @@ export function getTransporter(): Transporter | null {
       host: effectiveHost,
       port,
       secure: secure !== undefined ? secure : (port === 465),
+      family: 4, // Force IPv4 to prevent ENETUNREACH errors on cloud platforms (Render, etc.) lacking IPv6
       auth: { user, pass },
       tls: {
         rejectUnauthorized: false,
         minVersion: 'TLSv1.2'
       },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000
+      connectionTimeout: 9000,
+      greetingTimeout: 9000,
+      socketTimeout: 12000
     };
 
     cachedTransporter = nodemailer.createTransport(transportOptions);
@@ -240,96 +251,215 @@ export function getTransporter(): Transporter | null {
   }
 }
 
+export type SmtpErrorCategory = 
+  | 'Invalid SMTP credentials' 
+  | 'Connection timeout' 
+  | 'Port blocked' 
+  | 'Network unreachable' 
+  | 'Host not found' 
+  | 'SSL/TLS Error'
+  | 'Unknown error';
+
+export interface SmtpDiagnosticResult {
+  category: SmtpErrorCategory;
+  userMessage: string;
+  solutionHint: string;
+  technicalMessage: string;
+}
+
+/**
+ * Categorize and explain SMTP error with clear, user-friendly messages
+ */
+export function diagnoseSmtpError(err: any, port?: number): SmtpDiagnosticResult {
+  const msg = err?.message || String(err || '');
+  const code = (err?.code || '').toUpperCase();
+  const command = (err?.command || '').toUpperCase();
+
+  // 1. Invalid credentials / authentication failure
+  if (
+    msg.includes('535') ||
+    msg.includes('BadCredentials') ||
+    msg.includes('Username and Password not accepted') ||
+    msg.includes('Invalid login') ||
+    msg.includes('authentication failed') ||
+    code === 'EAUTH' ||
+    command.includes('AUTH')
+  ) {
+    return {
+      category: 'Invalid SMTP credentials',
+      userMessage: 'Invalid SMTP credentials (ভুল ইমেইল অথবা পাসওয়ার্ড): ইউজারনেম অথবা গুগল অ্যাপ পাসওয়ার্ড সঠিক নয়।',
+      solutionHint: 'আপনি যদি জিমেইলের সাধারণ পাসওয়ার্ড দিয়ে থাকেন তবে কাজ করবে না। আপনার গুগল একাউন্টের 2-Step Verification অন করে একটি ১৬ অক্ষরের Google App Password তৈরি করে পাসওয়ার্ড বক্সে বসান।',
+      technicalMessage: msg
+    };
+  }
+
+  // 2. Connection timeout
+  if (
+    code === 'ETIMEDOUT' ||
+    code === 'ESOCKETTIMEDOUT' ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ESOCKETTIMEDOUT') ||
+    msg.toLowerCase().includes('timeout')
+  ) {
+    return {
+      category: 'Connection timeout',
+      userMessage: `Connection timeout (কানেকশন টাইমআউট): পোর্ট ${port || '465/587'}-এ সার্ভারের সাথে নির্দিষ্ট সময়ে সংযোগ স্থাপন করা যায়নি।`,
+      solutionHint: `ক্লাউড হোস্টিংয়ে হয়তো পোর্ট ${port || 465} ট্রাফিক ব্লক রয়েছে। উপরে 'Gmail 587 (TLS)' বা 'Gmail 465 (SSL)' পরিবর্তন করে চেষ্টা করুন।`,
+      technicalMessage: msg
+    };
+  }
+
+  // 3. Port blocked / Connection refused
+  if (
+    code === 'ECONNREFUSED' ||
+    code === 'ECONNRESET' ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ECONNRESET')
+  ) {
+    return {
+      category: 'Port blocked',
+      userMessage: `Port blocked (পোর্ট সংযোগ প্রত্যাখ্যাত): সার্ভার পোর্ট ${port || '465/587'}-এ সংযোগ গ্রহণ করছে না।`,
+      solutionHint: 'হোস্টিং ফায়ারওয়াল এই আউটবাউন্ড পোর্ট ব্লক করেছে। বিকল্প পোর্ট (যেমন 587 বা 465) নির্বাচন করে ট্রাই করুন।',
+      technicalMessage: msg
+    };
+  }
+
+  // 4. Network unreachable (e.g. IPv6 unrouted on container)
+  if (
+    code === 'ENETUNREACH' ||
+    code === 'EHOSTUNREACH' ||
+    msg.includes('ENETUNREACH') ||
+    msg.includes('EHOSTUNREACH')
+  ) {
+    return {
+      category: 'Network unreachable',
+      userMessage: 'Network unreachable (নেটওয়ার্ক রুট অনুপলব্ধ): ক্লাউড হোস্টে IPv6 রুট উপলব্ধ নেই।',
+      solutionHint: 'সিস্টেমে IPv4 এনফোর্সমেন্ট যুক্ত করা হয়েছে। পুনরায় সেভ ও টেস্ট সংযোগ বাটনে ক্লিক করুন।',
+      technicalMessage: msg
+    };
+  }
+
+  // 5. Host not found / DNS failure
+  if (code === 'ENOTFOUND' || msg.includes('ENOTFOUND')) {
+    return {
+      category: 'Host not found',
+      userMessage: 'Host not found (SMTP সার্ভার পাওয়া যায়নি): ডোমেইন নাম বা সার্ভার এড্রেস সঠিক নয়।',
+      solutionHint: 'জিমেইল হলে SMTP Host বক্সে শুধুমাত্র smtp.gmail.com লিখুন।',
+      technicalMessage: msg
+    };
+  }
+
+  // 6. TLS / SSL handshake failure
+  if (msg.toLowerCase().includes('certificate') || msg.toLowerCase().includes('handshake') || msg.toLowerCase().includes('tls')) {
+    return {
+      category: 'SSL/TLS Error',
+      userMessage: 'SSL/TLS Error (এনক্রিপশন ত্রুটি): সিকিউর হ্যান্ডশেক করতে সমস্যা হয়েছে।',
+      solutionHint: 'পোর্ট 465 হলে SSL টিক দিয়ে রাখুন, অথবা পোর্ট 587 নির্বাচন করে SSL টিক তুলে TLS ব্যবহার করুন।',
+      technicalMessage: msg
+    };
+  }
+
+  return {
+    category: 'Unknown error',
+    userMessage: `SMTP সংযোগ ব্যর্থ: ${msg}`,
+    solutionHint: 'আপনার হোস্ট, পোর্ট, ইউজার এবং গুগল অ্যাপ পাসওয়ার্ড পুনরায় ভালো করে যাচাই করে চেষ্টা করুন।',
+    technicalMessage: msg
+  };
+}
+
 // Diagnose SMTP error message for friendly explanation
 export function explainSmtpError(err: any): string {
-  const msg = err?.message || String(err);
-  if (msg.includes('535') || msg.includes('BadCredentials') || msg.includes('Username and Password not accepted') || msg.includes('Invalid login')) {
-    return 'জিমেইল লগইন ব্যর্থ (535 Invalid Login): আপনি হয়তো আপনার সাধারণ জিমেইল পাসওয়ার্ড দিয়েছেন। জিমেইলে 2-Step Verification চালু করে একটি ১৬ অক্ষরের Google App Password তৈরি করে দিতে হবে।';
-  }
-  if (msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT')) {
-    return 'কানেকশন টাইমআউট (ETIMEDOUT): ক্লাউড হোস্টে পোর্ট 465 ব্লক থাকতে পারে। অনুগ্রহ করে উপরে "Gmail 587 (TLS)" প্রিসেটে ক্লিক করে সেভ করুন।';
-  }
-  if (msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET')) {
-    return 'সংযোগ প্রত্যাখ্যাত হয়েছে: সার্ভারের পোর্ট ব্লক। অনুগ্রহ করে "Gmail 587 (TLS)" প্রিসেট দিয়ে ট্রাই করুন।';
-  }
-  if (msg.includes('ENOTFOUND')) {
-    return 'সার্ভার পাওয়া যায়নি (ENOTFOUND): SMTP Host এড্রেস সঠিক নয় (যেমন: smtp.gmail.com)।';
-  }
-  return msg;
+  const diagnosed = diagnoseSmtpError(err);
+  return `${diagnosed.category} - ${diagnosed.userMessage} (${diagnosed.solutionHint})`;
 }
 
 // Verify SMTP connection
-export async function verifySmtpConnection(): Promise<{ success: boolean; message: string; details?: any }> {
+export async function verifySmtpConnection(): Promise<{
+  success: boolean;
+  message: string;
+  errorCategory?: SmtpErrorCategory;
+  solutionHint?: string;
+  details?: string;
+}> {
   const config = getSmtpConfig();
   if (!config.configured) {
     return {
       success: false,
-      message: 'SMTP কনফিগার করা নেই। অনুগ্রহ করে এডমিন প্যানেল থেকে SMTP Host, ইমেইল এবং App Password সেভ করুন।'
+      errorCategory: 'Invalid SMTP credentials',
+      message: 'SMTP কনফিগার করা নেই। অনুগ্রহ করে এডমিন প্যানেল থেকে SMTP Host, ইমেইল এবং App Password সেভ করুন।',
+      solutionHint: 'নিচের ফর্মে প্রয়োজনীয় তথ্য পূরণ করে সেভ করুন।'
     };
   }
 
   const transporter = getTransporter();
   if (!transporter) {
-    return { success: false, message: 'SMTP ট্রান্সপোর্টার ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে।' };
+    return {
+      success: false,
+      errorCategory: 'Unknown error',
+      message: 'SMTP ট্রান্সপোর্টার ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে।',
+      solutionHint: 'হোস্ট এবং ইউজার তথ্য সঠিক কিনা দেখে নিন।'
+    };
   }
 
   try {
     await transporter.verify();
     return {
       success: true,
-      message: `✅ SMTP সংযোগ সফল হয়েছে (${config.host}:${config.port})! ইমেইল পাঠানোর জন্য প্রস্তুত।`
+      message: `✅ SMTP সংযোগ সফল হয়েছে (${config.host}:${config.port})! ইমেইল পাঠানোর জন্য সম্পূর্ণ প্রস্তুত।`
     };
   } catch (err: any) {
-    const errorExplanation = explainSmtpError(err);
     console.error('[SMTP VERIFICATION ERROR]:', err);
+    let diagnostic = diagnoseSmtpError(err, config.port);
 
     // If port 465 failed due to timeout or network block on Cloud Host (e.g. Render),
-    // automatically attempt fallback to Port 587 (TLS/STARTTLS) with the same credentials!
+    // automatically attempt fallback to Port 587 (TLS/STARTTLS) with IPv4!
     const fileConfig = loadSmtpSettingsFile();
     const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
     const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
     const pass = rawPass.replace(/\s+/g, '');
     const isGmailHost = config.host.toLowerCase().includes('gmail') || config.host.toLowerCase().includes('google');
 
-    if (isGmailHost && config.port === 465 && user && pass) {
+    if (isGmailHost && user && pass && (diagnostic.category === 'Connection timeout' || diagnostic.category === 'Port blocked' || diagnostic.category === 'Network unreachable')) {
+      const fallbackPort = config.port === 465 ? 587 : 465;
+      const fallbackSecure = fallbackPort === 465;
+
       try {
-        console.log('[SMTP RETRY] Port 465 failed. Testing Port 587 (TLS) fallback...');
+        console.log(`[SMTP RETRY] Port ${config.port} failed (${diagnostic.category}). Testing Port ${fallbackPort} fallback with IPv4...`);
         const fallbackTransporter = nodemailer.createTransport({
           host: 'smtp.gmail.com',
-          port: 587,
-          secure: false,
+          port: fallbackPort,
+          secure: fallbackSecure,
+          family: 4,
           auth: { user, pass },
           tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 10000
-        });
+          connectionTimeout: 9000,
+          greetingTimeout: 9000,
+          socketTimeout: 12000
+        } as any);
         await fallbackTransporter.verify();
 
-        // Port 587 succeeded! Auto-update settings to Port 587 so future emails succeed!
-        saveSmtpSettingsFile({ port: 587, secure: false });
+        // Fallback succeeded! Auto-update settings so future emails succeed!
+        saveSmtpSettingsFile({ port: fallbackPort, secure: fallbackSecure });
         cachedTransporter = fallbackTransporter;
-        lastTransporterConfigKey = `smtp.gmail.com:587:${user}:${pass.slice(0, 4)}:false`;
+        lastTransporterConfigKey = `smtp.gmail.com:${fallbackPort}:${user}:${pass.slice(0, 4)}:${fallbackSecure}`;
 
         return {
           success: true,
-          message: `✅ পোর্ট 465 ব্লক থাকলেও ক্লাউড সার্ভারের জন্য পোর্ট 587 (TLS) দিয়ে সফলভাবে সংযোগ হয়েছে! সেটিংস স্বয়ংক্রিয়ভাবে Port 587 এ আপডেট করা হয়েছে।`
+          message: `✅ পোর্ট ${config.port} ব্লক থাকলেও ক্লাউড সার্ভারের জন্য পোর্ট ${fallbackPort} দিয়ে সফলভাবে সংযোগ হয়েছে! সেটিংস স্বয়ংক্রিয়ভাবে Port ${fallbackPort} এ আপডেট করা হয়েছে।`
         };
       } catch (fallbackErr: any) {
         console.log('[SMTP RETRY FAILED]:', fallbackErr.message);
-        // If fallback also failed with 535, it's definitely invalid password!
-        if (String(fallbackErr).includes('535')) {
-          return {
-            success: false,
-            message: 'জিমেইল লগইন ব্যর্থ (535 Invalid Login): আপনার দেওয়া ১৬ সংখ্যার App Password বা ইউজার ইমেইল সঠিক নয়। অনুগ্রহ করে গুগলে গিয়ে নতুন একটি App Password তৈরি করে দিন।'
-          };
-        }
+        // Overwrite diagnostic with the fallback error if it's more specific (like auth failure)
+        diagnostic = diagnoseSmtpError(fallbackErr, fallbackPort);
       }
     }
 
     return {
       success: false,
-      message: `SMTP যাচাই ব্যর্থ: ${errorExplanation}`
+      errorCategory: diagnostic.category,
+      message: diagnostic.userMessage,
+      solutionHint: diagnostic.solutionHint,
+      details: diagnostic.technicalMessage
     };
   }
 }
@@ -395,12 +525,21 @@ export async function sendEmailAlert(options: EmailAlertOptions): Promise<{ succ
 /**
  * Send Live Test Email to verify SMTP settings
  */
-export async function sendTestEmail(toEmail: string): Promise<{ success: boolean; message: string; messageId?: string; error?: string }> {
+export async function sendTestEmail(toEmail: string): Promise<{
+  success: boolean;
+  message: string;
+  messageId?: string;
+  error?: string;
+  errorCategory?: SmtpErrorCategory;
+  solutionHint?: string;
+}> {
   const config = getSmtpConfig();
   if (!config.configured) {
     return {
       success: false,
+      errorCategory: 'Invalid SMTP credentials',
       message: 'SMTP কনফিগার করা হয়নি! অনুগ্রহ করে এডমিন প্যানেলে আপনার SMTP Host (যেমন smtp.gmail.com), ইমেইল এবং Google App Password দিন।',
+      solutionHint: 'নিচের ফর্মে প্রয়োজনীয় তথ্য পূরণ করে সেভ করুন।',
       error: 'SMTP Not Configured'
     };
   }
@@ -409,7 +548,9 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
   if (!transporter) {
     return {
       success: false,
+      errorCategory: 'Unknown error',
       message: 'SMTP ট্রান্সপোর্টার তৈরি করা যায়নি। সেটিংস পুনরায় চেক করুন।',
+      solutionHint: 'হোস্ট এবং ইউজার তথ্য সঠিক কিনা দেখে নিন।',
       error: 'Transporter creation failed'
     };
   }
@@ -467,12 +608,14 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
       messageId: info.messageId
     };
   } catch (err: any) {
-    const explanation = explainSmtpError(err);
+    const diagnostic = diagnoseSmtpError(err, config.port);
     console.error(`[TEST EMAIL FAILED] Could not send to ${toEmail}:`, err);
     return {
       success: false,
-      message: `ইমেইল পাঠাতে ব্যর্থ হয়েছে: ${explanation}`,
-      error: explanation
+      errorCategory: diagnostic.category,
+      message: diagnostic.userMessage,
+      solutionHint: diagnostic.solutionHint,
+      error: diagnostic.technicalMessage
     };
   }
 }

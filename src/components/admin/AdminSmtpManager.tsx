@@ -35,17 +35,22 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
   });
 
   const [testEmail, setTestEmail] = useState('');
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-    error?: string;
-  } | null>(null);
 
   const [saveResult, setSaveResult] = useState<{
     success: boolean;
     connected?: boolean;
+    errorCategory?: string;
     message: string;
     details?: string;
+    solutionHint?: string;
+  } | null>(null);
+
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    errorCategory?: string;
+    solutionHint?: string;
+    error?: string;
   } | null>(null);
 
   const token = localStorage.getItem('bot_auth_token');
@@ -111,8 +116,12 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
         setSaveResult({
           success: true,
           connected: data.connected,
-          message: data.message + (data.connected ? ' (সার্ভারের সাথে সফলভাবে সংযুক্ত)' : ' (সতর্কতা: সংযোগ ব্যর্থ)'),
-          details: data.verifyMessage
+          errorCategory: data.errorCategory,
+          message: data.connected
+            ? `${data.message} (সার্ভারের সাথে সফলভাবে সংযুক্ত)`
+            : (data.verifyMessage || 'সংযোগ ব্যর্থ হয়েছে'),
+          details: data.details,
+          solutionHint: data.solutionHint
         });
         setStatusData({
           configured: true,
@@ -131,14 +140,17 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
         setSaveResult({
           success: false,
           connected: false,
-          message: data.error || 'সংরক্ষণ ব্যর্থ হয়েছে',
-          details: data.verifyMessage
+          errorCategory: data.errorCategory || 'Error',
+          message: data.error || data.verifyMessage || 'সংরক্ষণ ব্যর্থ হয়েছে',
+          details: data.details,
+          solutionHint: data.solutionHint
         });
       }
     } catch (err: any) {
       setSaveResult({
         success: false,
         connected: false,
+        errorCategory: 'Network Error',
         message: err.message || 'সংরক্ষণকালে সমস্যা হয়েছে'
       });
     } finally {
@@ -176,13 +188,16 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
       } else {
         setTestResult({
           success: false,
+          errorCategory: data.errorCategory,
           message: data.error || 'ইমেইল পাঠানো যায়নি',
-          error: data.details?.error || data.error
+          solutionHint: data.solutionHint,
+          error: data.details
         });
       }
     } catch (err: any) {
       setTestResult({
         success: false,
+        errorCategory: 'Network Error',
         message: err.message || 'টেস্ট ইমেইল পাঠানোর সময়ে নেটওয়ার্ক সমস্যা হয়েছে।'
       });
     } finally {
@@ -421,22 +436,41 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
             </div>
 
             {saveResult && (
-              <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+              <div className={`p-4 rounded-xl border text-xs space-y-2.5 ${
                 saveResult.connected
                   ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
                   : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
               }`}>
-                <div className="flex items-center gap-2 font-bold">
-                  {saveResult.connected ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
-                  <span>{saveResult.message}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    {saveResult.connected ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
+                    <span>{saveResult.message}</span>
+                  </div>
+                  {saveResult.errorCategory && !saveResult.connected && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/30 text-[10px] font-bold text-rose-300 whitespace-nowrap">
+                      {saveResult.errorCategory}
+                    </span>
+                  )}
                 </div>
-                {saveResult.details && (
-                  <p className="text-[11px] leading-relaxed text-slate-300 pl-6 border-l-2 border-slate-700">
-                    {saveResult.details}
-                  </p>
+
+                {saveResult.solutionHint && (
+                  <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/30 text-amber-200 text-[11px] leading-relaxed flex items-start gap-2">
+                    <span className="text-sm shrink-0">💡</span>
+                    <div>
+                      <strong className="block text-amber-300 font-semibold mb-0.5">কীভাবে সমাধান করবেন:</strong>
+                      <span>{saveResult.solutionHint}</span>
+                    </div>
+                  </div>
                 )}
+
+                {saveResult.details && (
+                  <div className="text-[10px] text-slate-400 pl-3 border-l-2 border-slate-700 font-mono break-all">
+                    টেকনিক্যাল ত্রুটি: {saveResult.details}
+                  </div>
+                )}
+
                 {!saveResult.connected && formData.port === 465 && (
-                  <div className="pt-1 pl-6">
+                  <div className="pt-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -505,19 +539,32 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
             </button>
 
             {testResult && (
-              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+              <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
                 testResult.success
                   ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
                   : 'bg-rose-950/50 border-rose-500/40 text-rose-300'
               }`}>
-                <div className="flex items-center gap-2 font-bold">
-                  {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
-                  <span>{testResult.success ? 'সফল!' : 'ব্যর্থ'}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
+                    <span>{testResult.success ? 'টেস্ট সফল!' : (testResult.errorCategory || 'টেস্ট ব্যর্থ')}</span>
+                  </div>
+                  {testResult.errorCategory && !testResult.success && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/30 text-[10px] font-bold text-rose-300 whitespace-nowrap">
+                      {testResult.errorCategory}
+                    </span>
+                  )}
                 </div>
                 <p className="leading-relaxed">{testResult.message}</p>
+                {testResult.solutionHint && !testResult.success && (
+                  <div className="p-2 rounded-lg bg-black/40 border border-amber-500/30 text-amber-200 text-[11px] leading-relaxed">
+                    <strong className="text-amber-300">💡 সমাধান: </strong>
+                    {testResult.solutionHint}
+                  </div>
+                )}
                 {testResult.error && (
-                  <p className="text-[11px] font-mono opacity-80 pt-1 border-t border-rose-500/20">
-                    {testResult.error}
+                  <p className="text-[10px] font-mono text-slate-400 pl-2 border-l-2 border-slate-700 break-all">
+                    ত্রুটি: {testResult.error}
                   </p>
                 )}
               </div>

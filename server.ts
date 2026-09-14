@@ -1746,7 +1746,10 @@ app.post('/api/admin/smtp-settings', async (req, res) => {
     success: true,
     message: 'SMTP সেটিংস সফলভাবে সংরক্ষিত হয়েছে!',
     connected: verifyResult.success,
+    errorCategory: verifyResult.errorCategory,
     verifyMessage: verifyResult.message,
+    solutionHint: verifyResult.solutionHint,
+    details: verifyResult.details,
     config: getSmtpConfig()
   });
 });
@@ -1767,14 +1770,16 @@ app.post('/api/admin/smtp-test', async (req, res) => {
   if (result.success) {
     res.json({
       success: true,
-      message: `টেস্ট ইমেইল সফলভাবে '${recipient}' এ পাঠানো হয়েছে!`,
-      details: result
+      message: result.message,
+      messageId: result.messageId
     });
   } else {
     res.status(500).json({
       success: false,
-      error: result.error || 'ইমেইল পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে SMTP সেটিংস যাচাই করুন।',
-      details: result
+      error: result.message,
+      errorCategory: result.errorCategory,
+      solutionHint: result.solutionHint,
+      details: result.error
     });
   }
 });
