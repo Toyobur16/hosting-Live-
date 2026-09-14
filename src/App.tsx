@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, X, Bell } from 'lucide-react';
 import { AppStoreHeader } from './components/AppStoreHeader';
 import { SidebarDrawer } from './components/SidebarDrawer';
@@ -20,6 +20,7 @@ import { SafeUploadModal } from './components/SafeUploadModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { HostedBot, LogEntry, AuthUser } from './types';
+import { playBotStoppedAlert } from './utils/audioAlert';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'market' | 'wallet' | 'wishlist' | 'support' | 'profile' | 'plans' | 'bots' | 'terminal'>('home');
@@ -50,6 +51,64 @@ export default function App() {
   const [tokenForDeploy, setTokenForDeploy] = useState<{ token: string; botName?: string } | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<string>('overview');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sound Notification Toggle State (persisted in localStorage)
+  const [soundAlertEnabled, setSoundAlertEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('bot_sound_alert_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleSoundAlert = (enabled: boolean) => {
+    setSoundAlertEnabled(enabled);
+    try {
+      localStorage.setItem('bot_sound_alert_enabled', String(enabled));
+    } catch {}
+  };
+
+  // Track previous bot statuses to play sound alert when a bot's status changes from 'running' to 'stopped'
+  const prevBotsStatusRef = useRef<Record<string, string>>({});
+  const initialBotStatusCheckRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    if (!bots || bots.length === 0) return;
+
+    // Skip playing sound on first load when populating initial statuses
+    if (initialBotStatusCheckRef.current) {
+      const initialMap: Record<string, string> = {};
+      bots.forEach((b) => {
+        initialMap[b.id] = b.status;
+      });
+      prevBotsStatusRef.current = initialMap;
+      initialBotStatusCheckRef.current = false;
+      return;
+    }
+
+    let transitionedToStopped = false;
+    let stoppedBotName = '';
+
+    bots.forEach((b) => {
+      const prevStatus = prevBotsStatusRef.current[b.id];
+      if (prevStatus === 'running' && b.status === 'stopped') {
+        transitionedToStopped = true;
+        stoppedBotName = b.name;
+      }
+      prevBotsStatusRef.current[b.id] = b.status;
+    });
+
+    if (transitionedToStopped && soundAlertEnabled) {
+      playBotStoppedAlert();
+      setToastMessage(
+        lang === 'bn'
+          ? `⚠️ সতর্কতা: ${stoppedBotName || 'বট'} অফলাইন বা স্টপ হয়েছে!`
+          : `⚠️ Alert: ${stoppedBotName || 'Bot'} stopped running!`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  }, [bots, soundAlertEnabled, lang]);
 
   // Dark Mode Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -692,6 +751,8 @@ export default function App() {
           onBotsUpdated={() => fetchBots()}
           onTestToken={() => setShowTokenCheckModal(true)}
           initialTab={settingsInitialTab}
+          soundAlertEnabled={soundAlertEnabled}
+          onToggleSoundAlert={handleToggleSoundAlert}
         />
       )}
 

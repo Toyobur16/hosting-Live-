@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { 
-  X, Settings, FileCode, Package, Database, ShieldCheck, Cloud, ChevronRight, HardDrive, ArrowLeft 
+  X, Settings, FileCode, Package, Database, ShieldCheck, Cloud, ChevronRight, HardDrive, ArrowLeft,
+  Bell, BellOff, Volume2 
 } from 'lucide-react';
 import { ScriptEditor } from './ScriptEditor';
 import { DatabaseManager } from './DatabaseManager';
 import { HostingGuide } from './HostingGuide';
 import { PipManagerModal } from './PipManagerModal';
 import { HostedBot, AuthUser } from '../types';
+import { playBotStoppedAlert } from '../utils/audioAlert';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,6 +21,8 @@ interface SettingsModalProps {
   onBotsUpdated: () => void;
   onTestToken: () => void;
   initialTab?: string;
+  soundAlertEnabled?: boolean;
+  onToggleSoundAlert?: (enabled: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -31,7 +35,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectBot,
   onBotsUpdated,
   onTestToken,
-  initialTab = 'overview'
+  initialTab = 'overview',
+  soundAlertEnabled = true,
+  onToggleSoundAlert
 }) => {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [showPip, setShowPip] = useState(false);
@@ -192,6 +198,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </select>
                   </div>
                 )}
+
+                {/* Sound Alert Notification Toggle */}
+                <div 
+                  id="bot-sound-alert-card"
+                  className="bg-white dark:bg-[#161f30] border border-[#e2e8f0] dark:border-[#1f293d] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div
+                      className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
+                        soundAlertEnabled
+                          ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
+                          : 'text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {soundAlertEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-[#1e293b] dark:text-white">
+                          {lang === 'bn' ? 'বট অফলাইন/স্টপ সাউন্ড অ্যালার্ট' : 'Bot Stopped Sound Alert'}
+                        </h4>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            soundAlertEnabled
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          {soundAlertEnabled ? (lang === 'bn' ? 'চালু' : 'Enabled') : (lang === 'bn' ? 'বন্ধ' : 'Muted')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#64748b] dark:text-[#94a3b8] mt-1 leading-relaxed">
+                        {lang === 'bn'
+                          ? 'কোনো বটের স্ট্যাটাস "running" থেকে "stopped" বা অফলাইন হলে সাথে সাথে ছোট অডিও বিপ অ্যালার্ট বাজবে।'
+                          : "Plays a short audio tone immediately whenever a bot's status changes from running to stopped."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      id="btn-test-sound-alert"
+                      onClick={() => playBotStoppedAlert()}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title={lang === 'bn' ? 'অ্যালার্ট সাউন্ড পরীক্ষা করুন' : 'Test sound alert'}
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{lang === 'bn' ? 'টেস্ট সাউন্ড' : 'Test Sound'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-toggle-sound-alert"
+                      role="switch"
+                      aria-checked={soundAlertEnabled}
+                      onClick={() => onToggleSoundAlert && onToggleSoundAlert(!soundAlertEnabled)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0088cc] ${
+                        soundAlertEnabled ? 'bg-[#0088cc]' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                      title={soundAlertEnabled ? (lang === 'bn' ? 'সাউন্ড বন্ধ করুন' : 'Mute sound alert') : (lang === 'bn' ? 'সাউন্ড চালু করুন' : 'Enable sound alert')}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          soundAlertEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {SETTING_ITEMS.map((item) => {
