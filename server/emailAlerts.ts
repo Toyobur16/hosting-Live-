@@ -51,6 +51,10 @@ export function loadSmtpSettingsFile(): SmtpSettingsData | null {
 
 export function saveSmtpSettingsFile(data: Partial<SmtpSettingsData>): boolean {
   try {
+    const dir = path.dirname(SMTP_SETTINGS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     const existing = loadSmtpSettingsFile() || {
       host: 'smtp.gmail.com',
       port: 465,
@@ -60,6 +64,10 @@ export function saveSmtpSettingsFile(data: Partial<SmtpSettingsData>): boolean {
       secure: true
     };
     const merged = { ...existing, ...data };
+    if (merged.pass) {
+      // Strip all whitespace from App Passwords
+      merged.pass = merged.pass.replace(/\s+/g, '');
+    }
     fs.writeFileSync(SMTP_SETTINGS_FILE, JSON.stringify(merged, null, 2), 'utf-8');
     // Invalidate cached transporter
     cachedTransporter = null;
@@ -207,24 +215,21 @@ export function getTransporter(): Transporter | null {
 
   try {
     const isGmail = host.toLowerCase().includes('gmail.com') || host.toLowerCase() === 'gmail';
-    const transportOptions: any = isGmail && port === 465
-      ? {
-          service: 'gmail',
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false }
-        }
-      : {
-          host,
-          port,
-          secure,
-          auth: { user, pass },
-          tls: {
-            rejectUnauthorized: false
-          },
-          connectionTimeout: 12000,
-          greetingTimeout: 12000,
-          socketTimeout: 15000
-        };
+    const effectiveHost = isGmail ? 'smtp.gmail.com' : host;
+
+    const transportOptions: any = {
+      host: effectiveHost,
+      port,
+      secure: secure !== undefined ? secure : (port === 465),
+      auth: { user, pass },
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000
+    };
 
     cachedTransporter = nodemailer.createTransport(transportOptions);
     lastTransporterConfigKey = currentKey;
@@ -239,13 +244,13 @@ export function getTransporter(): Transporter | null {
 export function explainSmtpError(err: any): string {
   const msg = err?.message || String(err);
   if (msg.includes('535') || msg.includes('BadCredentials') || msg.includes('Username and Password not accepted') || msg.includes('Invalid login')) {
-    return 'জিমেইল/SMTP লগইন ব্যর্থ (535 Invalid Login): আপনার গুগল একাউন্টে 2-Step Verification চালু করে একটি ১৬ সংখ্যার App Password তৈরি করে দিন। একাউন্টের সাধারণ পাসওয়ার্ড কাজ করবে না।';
+    return 'জিমেইল লগইন ব্যর্থ (535 Invalid Login): আপনি হয়তো আপনার সাধারণ জিমেইল পাসওয়ার্ড দিয়েছেন। জিমেইলে 2-Step Verification চালু করে একটি ১৬ অক্ষরের Google App Password তৈরি করে দিতে হবে।';
   }
   if (msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT')) {
-    return 'কানেকশন টাইমআউট (ETIMEDOUT): SMTP সার্ভারের সাথে সংযোগের সময় শেষ হয়েছে। পোর্ট (465 বা 587) ও হোস্টের নাম চেক করুন।';
+    return 'কানেকশন টাইমআউট (ETIMEDOUT): ক্লাউড হোস্টে পোর্ট 465 ব্লক থাকতে পারে। অনুগ্রহ করে উপরে "Gmail 587 (TLS)" প্রিসেটে ক্লিক করে সেভ করুন।';
   }
-  if (msg.includes('ECONNREFUSED')) {
-    return 'কানেকশন প্রত্যাখ্যাত (ECONNREFUSED): প্রদত্ত পোর্টে কোনো SMTP সার্ভার সাড়া দিচ্ছে না।';
+  if (msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET')) {
+    return 'সংযোগ প্রত্যাখ্যাত হয়েছে: সার্ভারের পোর্ট ব্লক। অনুগ্রহ করে "Gmail 587 (TLS)" প্রিসেট দিয়ে ট্রাই করুন।';
   }
   if (msg.includes('ENOTFOUND')) {
     return 'সার্ভার পাওয়া যায়নি (ENOTFOUND): SMTP Host এড্রেস সঠিক নয় (যেমন: smtp.gmail.com)।';
@@ -277,6 +282,51 @@ export async function verifySmtpConnection(): Promise<{ success: boolean; messag
   } catch (err: any) {
     const errorExplanation = explainSmtpError(err);
     console.error('[SMTP VERIFICATION ERROR]:', err);
+
+    // If port 465 failed due to timeout or network block on Cloud Host (e.g. Render),
+    // automatically attempt fallback to Port 587 (TLS/STARTTLS) with the same credentials!
+    const fileConfig = loadSmtpSettingsFile();
+    const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
+    const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
+    const pass = rawPass.replace(/\s+/g, '');
+    const isGmailHost = config.host.toLowerCase().includes('gmail') || config.host.toLowerCase().includes('google');
+
+    if (isGmailHost && config.port === 465 && user && pass) {
+      try {
+        console.log('[SMTP RETRY] Port 465 failed. Testing Port 587 (TLS) fallback...');
+        const fallbackTransporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000
+        });
+        await fallbackTransporter.verify();
+
+        // Port 587 succeeded! Auto-update settings to Port 587 so future emails succeed!
+        saveSmtpSettingsFile({ port: 587, secure: false });
+        cachedTransporter = fallbackTransporter;
+        lastTransporterConfigKey = `smtp.gmail.com:587:${user}:${pass.slice(0, 4)}:false`;
+
+        return {
+          success: true,
+          message: `✅ পোর্ট 465 ব্লক থাকলেও ক্লাউড সার্ভারের জন্য পোর্ট 587 (TLS) দিয়ে সফলভাবে সংযোগ হয়েছে! সেটিংস স্বয়ংক্রিয়ভাবে Port 587 এ আপডেট করা হয়েছে।`
+        };
+      } catch (fallbackErr: any) {
+        console.log('[SMTP RETRY FAILED]:', fallbackErr.message);
+        // If fallback also failed with 535, it's definitely invalid password!
+        if (String(fallbackErr).includes('535')) {
+          return {
+            success: false,
+            message: 'জিমেইল লগইন ব্যর্থ (535 Invalid Login): আপনার দেওয়া ১৬ সংখ্যার App Password বা ইউজার ইমেইল সঠিক নয়। অনুগ্রহ করে গুগলে গিয়ে নতুন একটি App Password তৈরি করে দিন।'
+          };
+        }
+      }
+    }
+
     return {
       success: false,
       message: `SMTP যাচাই ব্যর্থ: ${errorExplanation}`

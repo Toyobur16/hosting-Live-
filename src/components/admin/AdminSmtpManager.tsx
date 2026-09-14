@@ -43,7 +43,9 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
 
   const [saveResult, setSaveResult] = useState<{
     success: boolean;
+    connected?: boolean;
     message: string;
+    details?: string;
   } | null>(null);
 
   const token = localStorage.getItem('bot_auth_token');
@@ -108,7 +110,9 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
       if (res.ok && data.success) {
         setSaveResult({
           success: true,
-          message: data.message + (data.connected ? ' (সার্ভারের সাথে সফলভাবে সংযুক্ত)' : ' (সতর্কতা: সংযোগ ব্যর্থ)')
+          connected: data.connected,
+          message: data.message + (data.connected ? ' (সার্ভারের সাথে সফলভাবে সংযুক্ত)' : ' (সতর্কতা: সংযোগ ব্যর্থ)'),
+          details: data.verifyMessage
         });
         setStatusData({
           configured: true,
@@ -116,15 +120,25 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
           message: data.verifyMessage,
           config: data.config
         });
+        if (data.config?.port && data.config.port !== formData.port) {
+          setFormData((prev) => ({
+            ...prev,
+            port: data.config.port,
+            secure: data.config.secure !== undefined ? data.config.secure : prev.secure
+          }));
+        }
       } else {
         setSaveResult({
           success: false,
-          message: data.error || 'সংরক্ষণ ব্যর্থ হয়েছে'
+          connected: false,
+          message: data.error || 'সংরক্ষণ ব্যর্থ হয়েছে',
+          details: data.verifyMessage
         });
       }
     } catch (err: any) {
       setSaveResult({
         success: false,
+        connected: false,
         message: err.message || 'সংরক্ষণকালে সমস্যা হয়েছে'
       });
     } finally {
@@ -133,8 +147,13 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
   };
 
   const handleSendTestEmail = async () => {
-    if (!testEmail || !testEmail.includes('@')) {
-      alert(lang === 'bn' ? 'দয়া করে একটি সঠিক ইমেইল এড্রেস লিখুন।' : 'Please enter a valid email address.');
+    const trimmed = (testEmail || '').trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      alert(lang === 'bn' ? 'দয়া করে একটি সঠিক ও পূর্ণাঙ্গ ইমেইল এড্রেস লিখুন (যেমন: yourname@gmail.com)।' : 'Please enter a valid complete email address.');
+      return;
+    }
+    if (!trimmed.includes('.') || trimmed.endsWith('@gma') || trimmed.endsWith('@gmail')) {
+      alert(lang === 'bn' ? 'ইমেইল এড্রেসটি অসম্পূর্ণ মনে হচ্ছে! দয়া করে ডোমেইনটি সম্পূর্ণ করুন (যেমন: .com সহ)' : 'Incomplete email address domain. Please write complete email with .com');
       return;
     }
 
@@ -145,7 +164,7 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
       const res = await fetch('/api/admin/smtp-test', {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ email: testEmail })
+        body: JSON.stringify({ email: trimmed })
       });
       const data = await res.json();
 
@@ -402,11 +421,37 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
             </div>
 
             {saveResult && (
-              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-                saveResult.success ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+              <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                saveResult.connected
+                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
               }`}>
-                {saveResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                <span>{saveResult.message}</span>
+                <div className="flex items-center gap-2 font-bold">
+                  {saveResult.connected ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
+                  <span>{saveResult.message}</span>
+                </div>
+                {saveResult.details && (
+                  <p className="text-[11px] leading-relaxed text-slate-300 pl-6 border-l-2 border-slate-700">
+                    {saveResult.details}
+                  </p>
+                )}
+                {!saveResult.connected && formData.port === 465 && (
+                  <div className="pt-1 pl-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyPreset('gmail-tls');
+                        setTimeout(() => {
+                          const formEl = document.querySelector('form');
+                          if (formEl) formEl.requestSubmit();
+                        }, 50);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <span>👉 ক্লাউড সার্ভারের জন্য 'Gmail 587 (TLS)' দিয়ে চেষ্টা করুন</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

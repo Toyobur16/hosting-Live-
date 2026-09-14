@@ -1674,7 +1674,7 @@ app.get('/api/admin/smtp-status', async (req, res) => {
   if (!config.configured) {
     return res.json({
       configured: false,
-      message: 'SMTP credentials not configured in .env (Requires SMTP_HOST, SMTP_USER, SMTP_PASS)',
+      message: 'SMTP কনফিগার করা হয়নি। নিচের ফর্মে আপনার জিমেইল ও ১৬ সংখ্যার App Password দিয়ে সেভ করুন।',
       config
     });
   }
