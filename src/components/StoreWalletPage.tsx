@@ -44,9 +44,9 @@ export function StoreWalletPage({
     rocketEnabled: false
   });
 
-  const [selectedGateway, setSelectedGateway] = useState<'bkash' | 'nagad' | 'binance'>('binance');
+  const [selectedGateway, setSelectedGateway] = useState<'binance'>('binance');
   const [depositAmount, setDepositAmount] = useState<string>('5');
-  const [depositCurrency, setDepositCurrency] = useState<'BDT' | 'USD'>('USD');
+  const [depositCurrency, setDepositCurrency] = useState<'USD'>('USD');
   const [senderIdentifier, setSenderIdentifier] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
   const [depositNote, setDepositNote] = useState<string>('');
@@ -69,16 +69,8 @@ export function StoreWalletPage({
       if (res.ok) {
         const data = await res.json();
         setPaymentSettings(data);
-        if (data.binanceEnabled !== false) {
-          setSelectedGateway('binance');
-          setDepositCurrency('USD');
-        } else if (data.bkashEnabled) {
-          setSelectedGateway('bkash');
-          setDepositCurrency('BDT');
-        } else if (data.nagadEnabled) {
-          setSelectedGateway('nagad');
-          setDepositCurrency('BDT');
-        }
+        setSelectedGateway('binance');
+        setDepositCurrency('USD');
       }
     } catch {}
   };
@@ -385,92 +377,28 @@ export function StoreWalletPage({
 
           {/* Payment Gateway Cards (Binance by default; other methods only show if enabled in admin panel) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Binance Card */}
-            {(paymentSettings.binanceEnabled !== false || (!paymentSettings.bkashEnabled && !paymentSettings.nagadEnabled)) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGateway('binance');
-                  setDepositCurrency('USD');
-                }}
-                className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                  selectedGateway === 'binance'
-                    ? 'bg-[#1f1b0a] border-amber-400 ring-2 ring-amber-400/30 shadow-lg'
-                    : 'bg-[#0f172a] border-[#1e293b] hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 border border-amber-400/40 flex items-center justify-center text-amber-400 font-black text-sm shadow-md">
-                    ⟠
-                  </div>
-                  <div>
-                    <span className="text-xs font-black text-white block">Binance</span>
-                    <span className="text-[10px] text-amber-400 font-semibold">Pay ID / UID</span>
-                  </div>
+            {/* Binance Card (USDT) */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedGateway('binance');
+                setDepositCurrency('USD');
+              }}
+              className="p-4 rounded-2xl border text-left cursor-pointer transition-all bg-[#1f1b0a] border-amber-400 ring-2 ring-amber-400/30 shadow-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-amber-400/40 flex items-center justify-center text-amber-400 font-black text-sm shadow-md">
+                  ₮
                 </div>
-                <div className="mt-3 text-xs font-black text-slate-200 bg-[#0a0f1d] p-2 rounded-lg border border-[#1e293b] truncate">
-                  {paymentSettings.binancePayId || paymentSettings.binanceUid || paymentSettings.binanceId || '922593999'}
+                <div>
+                  <span className="text-xs font-black text-white block">Binance (USDT)</span>
+                  <span className="text-[10px] text-amber-400 font-semibold">Pay ID / UID</span>
                 </div>
-              </button>
-            )}
-
-            {/* BKash Card (only if enabled by admin) */}
-            {paymentSettings.bkashEnabled && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGateway('bkash');
-                  setDepositCurrency('BDT');
-                }}
-                className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                  selectedGateway === 'bkash'
-                    ? 'bg-[#150f1d] border-pink-500 ring-2 ring-pink-500/30 shadow-lg'
-                    : 'bg-[#0f172a] border-[#1e293b] hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#d12053] flex items-center justify-center text-white font-black text-sm shadow-md">
-                    bK
-                  </div>
-                  <div>
-                    <span className="text-xs font-black text-white block">BKash</span>
-                    <span className="text-[10px] text-pink-400 font-semibold">Personal</span>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs font-black text-slate-200 bg-[#0a0f1d] p-2 rounded-lg border border-[#1e293b] truncate">
-                  {paymentSettings.bkashNumber || '01614572747'}
-                </div>
-              </button>
-            )}
-
-            {/* Nogod Card (only if enabled by admin) */}
-            {paymentSettings.nagadEnabled && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGateway('nagad');
-                  setDepositCurrency('BDT');
-                }}
-                className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                  selectedGateway === 'nagad'
-                    ? 'bg-[#1e110d] border-orange-500 ring-2 ring-orange-500/30 shadow-lg'
-                    : 'bg-[#0f172a] border-[#1e293b] hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#f7941d] flex items-center justify-center text-white font-black text-sm shadow-md">
-                    ন
-                  </div>
-                  <div>
-                    <span className="text-xs font-black text-white block">Nogod</span>
-                    <span className="text-[10px] text-orange-400 font-semibold">Personal</span>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs font-black text-slate-200 bg-[#0a0f1d] p-2 rounded-lg border border-[#1e293b] truncate">
-                  {paymentSettings.nagadNumber || '01304104492'}
-                </div>
-              </button>
-            )}
+              </div>
+              <div className="mt-3 text-xs font-black text-slate-200 bg-[#0a0f1d] p-2 rounded-lg border border-[#1e293b] truncate">
+                {paymentSettings.binancePayId || paymentSettings.binanceUid || paymentSettings.binanceId || '922593999'}
+              </div>
+            </button>
           </div>
 
           {/* Selected Gateway Payment Details & Submission Form */}

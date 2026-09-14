@@ -29,7 +29,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
   // Deposit Form State
   const [depositMethod, setDepositMethod] = useState<'binance' | 'bkash' | 'nagad' | 'rocket'>('binance');
-  const [depositCurrency, setDepositCurrency] = useState<'USD' | 'BDT'>('USD');
+  const [depositCurrency, setDepositCurrency] = useState<'USD'>('USD');
   const [depositAmount, setDepositAmount] = useState<string>('5');
   const [senderIdentifier, setSenderIdentifier] = useState('');
   const [depositTrxId, setDepositTrxId] = useState('');
@@ -37,7 +37,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
   // Buy Flow State
   const [buyingPlan, setBuyingPlan] = useState<HostingPlan | null>(null);
-  const [buyCurrency, setBuyCurrency] = useState<'USD' | 'BDT'>('USD');
+  const [buyCurrency, setBuyCurrency] = useState<'USD'>('USD');
   const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [buySuccess, setBuySuccess] = useState<string | null>(null);
@@ -77,13 +77,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
   // Adjust currency default when deposit method changes
   useEffect(() => {
-    if (depositMethod === 'binance') {
-      setDepositCurrency('USD');
-      if (!depositAmount || depositAmount === '150') setDepositAmount('5');
-    } else {
-      setDepositCurrency('BDT');
-      if (!depositAmount || depositAmount === '5') setDepositAmount('150');
-    }
+    setDepositCurrency('USD');
+    if (!depositAmount || depositAmount === '150') setDepositAmount('5');
   }, [depositMethod]);
 
   const fetchPlans = async () => {
@@ -143,13 +138,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   const handleStartDepositForPlan = (plan: HostingPlan) => {
     setBuyingPlan(null);
     setActiveView('deposit');
-    if (depositMethod === 'binance') {
-      setDepositCurrency('USD');
-      setDepositAmount((plan.priceUsd || 5).toString());
-    } else {
-      setDepositCurrency('BDT');
-      setDepositAmount((plan.priceBdt || 150).toString());
-    }
+    setDepositCurrency('USD');
+    setDepositAmount((plan.priceUsd || 5).toString());
   };
 
   const handleSubmitDeposit = async (e: React.FormEvent) => {
@@ -308,11 +298,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-slate-400 font-semibold">{lang === 'bn' ? 'আপনার ওয়ালেট ব্যালেন্স:' : 'Wallet Balance:'}</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-black text-xs border border-emerald-500/40">
-                  ৳{balanceBdt.toFixed(2)} BDT
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black text-xs border border-amber-500/40">
-                  ${balanceUsd.toFixed(2)} USD
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-black text-xs border border-emerald-500/40 flex items-center gap-1.5">
+                  <span>${balanceUsd.toFixed(2)}</span>
+                  <span className="text-[10px] px-1 rounded bg-emerald-500/30 text-emerald-200 uppercase font-black">USDT</span>
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
@@ -432,18 +420,16 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                         <div className="mb-3">
                           {isFree ? (
                             <div className="flex items-baseline gap-1.5">
-                              <span className="text-2xl font-black text-emerald-400">৳০ / ফ্রি</span>
+                              <span className="text-2xl font-black text-emerald-400">$0 / Free</span>
                               <span className="text-xs text-slate-400 font-medium">লাইফটাইম</span>
                             </div>
                           ) : (
                             <div className="space-y-1">
                               <div className="flex items-baseline gap-2 flex-wrap">
-                                <span className="text-2xl font-black text-white">৳{p.priceBdt} BDT</span>
-                                {p.priceUsd > 0 && (
-                                  <span className="text-xs font-black text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30">
-                                    ${p.priceUsd} USD
-                                  </span>
-                                )}
+                                <span className="text-2xl font-black text-white">${p.priceUsd}</span>
+                                <span className="text-xs font-black text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md border border-emerald-500/30 uppercase">
+                                  USDT
+                                </span>
                               </div>
                               <p className="text-xs text-slate-400 font-medium">
                                 {p.durationDays} {lang === 'bn' ? 'দিন সার্বক্ষণিক মেয়াদ' : 'Days Hosting'}
@@ -488,12 +474,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                               setBuyingPlan(p);
                               setBuyError(null);
                               setBuySuccess(null);
-                              // Default to currency where user has balance
-                              if (balanceUsd >= (p.priceUsd || 0)) {
-                                setBuyCurrency('USD');
-                              } else {
-                                setBuyCurrency('BDT');
-                              }
+                              setBuyCurrency('USD');
                             }}
                             className={`w-full py-2.5 px-4 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md ${
                               p.popular
@@ -562,59 +543,26 @@ export const PlansModal: React.FC<PlansModalProps> = ({
               {/* Method Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-2">
-                  {lang === 'bn' ? '১. পেমেন্ট মেথড নির্বাচন করুন:' : '1. Select Deposit Method:'}
+                  {lang === 'bn' ? '১. পেমেন্ট মেথড (USDT):' : '1. Select Deposit Method (USDT):'}
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setDepositMethod('binance')}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                      depositMethod === 'binance'
-                        ? 'bg-[#f3ba2f]/15 border-[#f3ba2f] text-[#f3ba2f] ring-2 ring-[#f3ba2f]/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                    }`}
+                    className="p-3.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 cursor-pointer bg-[#f3ba2f]/15 border-[#f3ba2f] text-[#f3ba2f] ring-2 ring-[#f3ba2f]/30"
                   >
-                    <span className="font-extrabold text-sm">USDT (Binance)</span>
-                    <span className="text-[10px] text-amber-400">USD ব্যালেন্স</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDepositMethod('bkash')}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                      depositMethod === 'bkash'
-                        ? 'bg-[#e2136e]/15 border-[#e2136e] text-[#e2136e] ring-2 ring-[#e2136e]/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    <span className="font-extrabold text-sm">bKash (বিকাশ)</span>
-                    <span className="text-[10px] text-pink-400">BDT ব্যালেন্স</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDepositMethod('nagad')}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                      depositMethod === 'nagad'
-                        ? 'bg-[#f7941d]/15 border-[#f7941d] text-[#f7941d] ring-2 ring-[#f7941d]/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    <span className="font-extrabold text-sm">Nagad (নগদ)</span>
-                    <span className="text-[10px] text-amber-500">BDT ব্যালেন্স</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDepositMethod('rocket')}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                      depositMethod === 'rocket'
-                        ? 'bg-[#8c3494]/15 border-[#8c3494] text-[#a445ad] ring-2 ring-[#8c3494]/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    <span className="font-extrabold text-sm">Rocket (রকেট)</span>
-                    <span className="text-[10px] text-purple-400">BDT ব্যালেন্স</span>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#f3ba2f] text-black font-black flex items-center justify-center text-xs">
+                        ₮
+                      </div>
+                      <div className="text-left">
+                        <span className="font-extrabold text-sm text-white block">USDT (Binance Pay / TRC20)</span>
+                        <span className="text-[10px] text-amber-300 font-semibold">ইনস্ট্যান্ট ভেরিফিকেশন ও ওয়ালেট ব্যালেন্স</span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase">
+                      Active
+                    </span>
                   </button>
                 </div>
               </div>
@@ -622,7 +570,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
               {/* Payment Account Details Box */}
               <div className="p-4 rounded-xl bg-[#080d17] border border-[#1f2d48] space-y-3 text-xs">
                 <span className="text-[10px] font-bold text-[#0088cc] uppercase tracking-wider">
-                  {lang === 'bn' ? 'টাকা বা ডলার পাঠানোর ঠিকানা / একাউন্ট:' : 'Payment Account Details:'}
+                  {lang === 'bn' ? 'ডলার (USDT) পাঠানোর Binance একাউন্ট তথ্য:' : 'USDT Payment Account Details:'}
                 </span>
 
                 {depositMethod === 'binance' ? (
@@ -905,37 +853,15 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                 </p>
               </div>
 
-              {/* Currency Selector */}
-              <div className="space-y-1.5 text-xs">
-                <label className="block font-bold text-slate-300">
-                  {lang === 'bn' ? 'কোন কারেন্সির ব্যালেন্স দিয়ে কাটবেন?' : 'Select Payment Currency:'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBuyCurrency('USD')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center cursor-pointer transition-all ${
-                      buyCurrency === 'USD'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 ring-1 ring-amber-500/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-400'
-                    }`}
-                  >
-                    <span>${buyingPlan.priceUsd} USD</span>
-                    <span className="text-[10px] text-slate-400 font-normal">ওয়ালেটে আছে: ${balanceUsd.toFixed(2)}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBuyCurrency('BDT')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center cursor-pointer transition-all ${
-                      buyCurrency === 'BDT'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/30'
-                        : 'bg-[#0d1524] border-[#1f2d48] text-slate-400'
-                    }`}
-                  >
-                    <span>৳{buyingPlan.priceBdt} BDT</span>
-                    <span className="text-[10px] text-slate-400 font-normal">ওয়ালেটে আছে: ৳{balanceBdt.toFixed(2)}</span>
-                  </button>
+              {/* Purchase Cost & Balance Summary */}
+              <div className="p-3.5 rounded-xl bg-[#090f1a] border border-[#1a2538] space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300 font-medium">{lang === 'bn' ? 'প্যাকেজের মূল্য:' : 'Plan Price:'}</span>
+                  <span className="text-base font-black text-emerald-400">${buyingPlan.priceUsd} USDT</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[11px]">
+                  <span className="text-slate-400">{lang === 'bn' ? 'আপনার বর্তমান ব্যালেন্স:' : 'Your Wallet Balance:'}</span>
+                  <span className="font-bold text-white">${balanceUsd.toFixed(2)} USDT</span>
                 </div>
               </div>
 
@@ -955,8 +881,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
               )}
 
               {/* Insufficient balance trigger */}
-              {((buyCurrency === 'USD' && balanceUsd < (buyingPlan.priceUsd || 0)) ||
-                (buyCurrency === 'BDT' && balanceBdt < (buyingPlan.priceBdt || 0))) && (
+              {balanceUsd < (buyingPlan.priceUsd || 0) && (
                 <div className="p-3.5 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-300 text-xs space-y-2">
                   <div className="flex items-center gap-2 font-bold">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
@@ -964,8 +889,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                   </div>
                   <p className="text-[11px] text-slate-300">
                     {lang === 'bn'
-                      ? `প্রয়োজন ${buyCurrency === 'USD' ? `$${buyingPlan.priceUsd} USD` : `৳${buyingPlan.priceBdt} BDT`}। প্রথমে ওয়ালেটে ডিপোজিট করুন।`
-                      : `Required: ${buyCurrency === 'USD' ? `$${buyingPlan.priceUsd} USD` : `৳${buyingPlan.priceBdt} BDT`}. Please deposit first.`}
+                      ? `প্রয়োজন $${buyingPlan.priceUsd} USDT। আপনার আছে $${balanceUsd.toFixed(2)} USDT। প্রথমে ওয়ালেটে ডিপোজিট করুন।`
+                      : `Required: $${buyingPlan.priceUsd} USDT. You have $${balanceUsd.toFixed(2)} USDT. Please deposit first.`}
                   </p>
                   <button
                     type="button"
@@ -973,7 +898,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                     className="w-full py-2 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                   >
                     <PlusCircle className="w-3.5 h-3.5" />
-                    <span>{lang === 'bn' ? 'ওয়ালেটে ডিপোজিট করুন' : 'Deposit Funds Now'}</span>
+                    <span>{lang === 'bn' ? 'USDT ডিপোজিট করুন' : 'Deposit USDT Now'}</span>
                   </button>
                 </div>
               )}
@@ -992,8 +917,7 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                   type="button"
                   disabled={
                     buyLoading ||
-                    (buyCurrency === 'USD' && balanceUsd < (buyingPlan.priceUsd || 0)) ||
-                    (buyCurrency === 'BDT' && balanceBdt < (buyingPlan.priceBdt || 0))
+                    balanceUsd < (buyingPlan.priceUsd || 0)
                   }
                   onClick={handleBuyWithWallet}
                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"

@@ -488,27 +488,19 @@ export function AdminStoreManager() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  মূল্য টাকা (Price BDT ৳) *
-                </label>
-                <input
-                  type="number"
-                  value={editingItem.priceBdt || 0}
-                  onChange={(e) => setEditingItem({ ...editingItem, priceBdt: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs text-white focus:border-[#00d293] outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  মূল্য ডলার (Price USD $) *
+                <label className="block text-[11px] font-bold text-emerald-400 mb-1">
+                  মূল্য ($ USDT) *
                 </label>
                 <input
                   type="number"
                   step="0.1"
+                  min="0"
                   value={editingItem.priceUsd || 0}
-                  onChange={(e) => setEditingItem({ ...editingItem, priceUsd: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs text-white focus:border-[#00d293] outline-none"
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setEditingItem({ ...editingItem, priceUsd: val, priceBdt: Math.round(val * 120) });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs text-white focus:border-[#00d293] outline-none font-bold"
                 />
               </div>
 
@@ -598,8 +590,7 @@ export function AdminStoreManager() {
                   <span className="text-xs font-black text-white block truncate">{it.title}</span>
                   <span className="text-[10px] text-[#00d293] font-bold block">{it.categoryName}</span>
                   <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
-                    <span className="font-bold text-white">৳{it.priceBdt}</span>
-                    <span>(${it.priceUsd})</span>
+                    <span className="font-bold text-emerald-400">${it.priceUsd} USDT</span>
                     <span>• ↓ {it.downloads || 0}</span>
                   </div>
                 </div>

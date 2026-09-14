@@ -179,7 +179,7 @@ export const UsersManager: React.FC<UsersManagerProps> = ({ lang }) => {
                       {u.username && <div className="text-[11px] text-[#0088cc] font-mono">@{u.username}</div>}
                     </td>
                     <td className="p-3.5 font-mono font-bold text-emerald-600">
-                      {Number(u.balance || 0).toFixed(2)} BDT
+                      {Number(u.balance || 0).toFixed(2)} USDT
                     </td>
                     <td className="p-3.5 font-mono text-[#64748b]">{u.total_numbers || 0}</td>
                     <td className="p-3.5">
@@ -247,7 +247,7 @@ export const UsersManager: React.FC<UsersManagerProps> = ({ lang }) => {
                     <td className="p-3.5 font-mono text-[#1e293b] font-bold">{w.user_id}</td>
                     <td className="p-3.5 font-semibold text-[#0088cc]">{w.method}</td>
                     <td className="p-3.5 font-mono text-[#1e293b]">{w.number}</td>
-                    <td className="p-3.5 font-mono font-bold text-emerald-600">{Number(w.amount).toFixed(2)} BDT</td>
+                    <td className="p-3.5 font-mono font-bold text-emerald-600">{Number(w.amount).toFixed(2)} USDT</td>
                     <td className="p-3.5">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                         w.status === 'approved'
@@ -295,7 +295,7 @@ export const UsersManager: React.FC<UsersManagerProps> = ({ lang }) => {
             <p className="text-xs text-[#64748b] mb-4">
               User ID: <span className="font-mono text-[#1e293b] font-semibold">{selectedUser.user_id}</span>
               <br />
-              Current: <span className="font-mono text-emerald-600 font-bold">{selectedUser.balance} BDT</span>
+              Current: <span className="font-mono text-emerald-600 font-bold">{selectedUser.balance} USDT</span>
             </p>
             <div className="mb-4">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748b] mb-1.5">

@@ -14,7 +14,9 @@ import {
   getSmtpConfig,
   verifySmtpConnection,
   sendTestEmail,
-  checkAndSendExpiringPlanAlerts
+  checkAndSendExpiringPlanAlerts,
+  loadSmtpSettingsFile,
+  saveSmtpSettingsFile
 } from './server/emailAlerts';
 
 const app = express();
@@ -1475,6 +1477,7 @@ app.get('/api/admin/overview', (req, res) => {
     runningBots: runningProcesses.size,
     pendingRequestsCount: pendingRequests.length,
     approvedRequestsCount: approvedRequests.length,
+    totalRevenueUsd: totalRevenue,
     totalRevenueBdt: totalRevenue,
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString()
@@ -1517,12 +1520,8 @@ app.post('/api/admin/plan-requests/:id/approve', async (req, res) => {
   const targetUser = accounts.find((a) => a.id === request.userId || (a.email && a.email.toLowerCase() === request.userEmail.toLowerCase()));
   if (targetUser) {
     if (request.type === 'deposit') {
-      // Wallet deposit approval
-      if (request.currency === 'BDT') {
-        targetUser.balanceBdt = (targetUser.balanceBdt || 0) + (request.amount || 0);
-      } else {
-        targetUser.balanceUsd = (targetUser.balanceUsd || 0) + (request.amount || 0);
-      }
+      // Wallet deposit approval (credit balance in USDT)
+      targetUser.balanceUsd = (targetUser.balanceUsd || 0) + (request.amount || 0);
       saveAccounts(accounts);
       await sendDepositProcessedAlert(targetUser, request, 'approved');
     } else {
@@ -1601,6 +1600,69 @@ app.get('/api/admin/smtp-status', async (req, res) => {
     connected: verifyResult.success,
     message: verifyResult.message,
     config
+  });
+});
+
+// Get current SMTP settings (for admin editing)
+app.get('/api/admin/smtp-settings', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const saved = loadSmtpSettingsFile();
+  const config = getSmtpConfig();
+
+  res.json({
+    settings: {
+      host: saved?.host || process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: saved?.port || (process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465),
+      user: saved?.user || process.env.SMTP_USER || '',
+      pass: saved?.pass || (process.env.SMTP_PASS ? '********' : ''),
+      from: saved?.from || process.env.SMTP_FROM || '',
+      secure: saved?.secure !== undefined ? saved.secure : (process.env.SMTP_SECURE === 'true' || true)
+    },
+    config
+  });
+});
+
+// Save SMTP settings from Admin Panel
+app.post('/api/admin/smtp-settings', async (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { host, port, user, pass, from, secure } = req.body;
+  if (!host || !user) {
+    return res.status(400).json({ error: 'SMTP Host এবং User Email দেওয়া আবশ্যক।' });
+  }
+
+  const existing = loadSmtpSettingsFile();
+  // Keep existing pass if masked string was sent back unchanged
+  const finalPass = (pass === '********' && existing?.pass) ? existing.pass : (pass || '');
+
+  const saved = saveSmtpSettingsFile({
+    host: (host || '').trim(),
+    port: parseInt(String(port || '465').trim(), 10),
+    user: (user || '').trim(),
+    pass: finalPass.trim(),
+    from: (from || '').trim(),
+    secure: secure !== undefined ? Boolean(secure) : true
+  });
+
+  if (!saved) {
+    return res.status(500).json({ error: 'SMTP সেটিংস সংরক্ষণ করতে ব্যর্থ হয়েছে।' });
+  }
+
+  const verifyResult = await verifySmtpConnection();
+
+  res.json({
+    success: true,
+    message: 'SMTP সেটিংস সফলভাবে সংরক্ষিত হয়েছে!',
+    connected: verifyResult.success,
+    verifyMessage: verifyResult.message,
+    config: getSmtpConfig()
   });
 });
 

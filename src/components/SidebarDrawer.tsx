@@ -95,7 +95,7 @@ export function SidebarDrawer({
       id: 'wallet',
       label: lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট' : 'Wallet & Deposit',
       icon: Wallet,
-      badge: user ? `৳${user.balanceBdt || 0}` : null,
+      badge: user ? `$${Number(user.balanceUsd || 0).toFixed(2)} USDT` : null,
       color: 'emerald'
     },
     {

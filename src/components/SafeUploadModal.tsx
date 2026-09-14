@@ -206,7 +206,7 @@ export const SafeUploadModal: React.FC<SafeUploadModalProps> = ({
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400">{lang === 'bn' ? 'মোট সংরক্ষিত ব্যালেন্স' : 'Protected Balance'}</p>
-                  <p className="text-sm font-bold text-amber-400">{dbStats.totalBalance.toFixed(2)} ৳/pts</p>
+                  <p className="text-sm font-bold text-emerald-400">${dbStats.totalBalance.toFixed(2)} USDT</p>
                 </div>
               </div>
             </div>

@@ -206,11 +206,9 @@ export const WalletDepositPage: React.FC<WalletDepositPageProps> = ({
                 <span className="text-3xl sm:text-4xl font-black text-emerald-400">
                   ${user ? (user.balanceUsd || 0).toFixed(2) : '0.00'}
                 </span>
-                <span className="text-sm font-bold text-slate-300">USD</span>
-              </div>
-              <div className="text-xs text-slate-400">
-                {lang === 'bn' ? 'সমপরিমাণ BDT:' : 'BDT Equivalent:'}{' '}
-                <strong className="text-white">৳{user ? (user.balanceBdt || 0).toFixed(0) : '0'} BDT</strong>
+                <span className="text-sm font-black px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 uppercase">
+                  USDT
+                </span>
               </div>
             </div>
 

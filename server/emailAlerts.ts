@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 const NOTIFICATIONS_FILE = path.join(process.cwd(), 'hosted_bots', 'notifications.json');
+const SMTP_SETTINGS_FILE = path.join(process.cwd(), 'hosted_bots', 'smtp_settings.json');
 
 export interface EmailAlertOptions {
   to: string;
@@ -21,6 +22,53 @@ export interface SmtpConfigInfo {
   user: string;
   from: string;
   secure: boolean;
+  source?: 'file' | 'env' | 'none';
+}
+
+export interface SmtpSettingsData {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from?: string;
+  secure?: boolean;
+}
+
+export function loadSmtpSettingsFile(): SmtpSettingsData | null {
+  try {
+    if (fs.existsSync(SMTP_SETTINGS_FILE)) {
+      const content = fs.readFileSync(SMTP_SETTINGS_FILE, 'utf-8');
+      const data = JSON.parse(content);
+      if (data && (data.host || data.user)) {
+        return data;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading smtp_settings.json:', err);
+  }
+  return null;
+}
+
+export function saveSmtpSettingsFile(data: Partial<SmtpSettingsData>): boolean {
+  try {
+    const existing = loadSmtpSettingsFile() || {
+      host: 'smtp.gmail.com',
+      port: 465,
+      user: '',
+      pass: '',
+      from: '',
+      secure: true
+    };
+    const merged = { ...existing, ...data };
+    fs.writeFileSync(SMTP_SETTINGS_FILE, JSON.stringify(merged, null, 2), 'utf-8');
+    // Invalidate cached transporter
+    cachedTransporter = null;
+    lastTransporterConfigKey = '';
+    return true;
+  } catch (err) {
+    console.error('Error saving smtp_settings.json:', err);
+    return false;
+  }
 }
 
 // In-memory or file-based notifications store for users
@@ -94,16 +142,25 @@ export function addBroadcastNotification(title: string, message: string, type = 
   return newNotification;
 }
 
-// Get SMTP Configuration Details
+// Get SMTP Configuration Details (checks smtp_settings.json first, falls back to process.env)
 export function getSmtpConfig(): SmtpConfigInfo {
-  const host = (process.env.SMTP_HOST || '').trim();
-  const port = parseInt((process.env.SMTP_PORT || '587').trim(), 10);
-  const user = (process.env.SMTP_USER || '').trim();
-  const pass = (process.env.SMTP_PASS || '').trim();
-  const from = (process.env.SMTP_FROM || user || 'noreply@hosting-live-fast.cloud').trim();
-  const secure = process.env.SMTP_SECURE === 'true' || (process.env.SMTP_SECURE !== 'false' && port === 465);
+  const fileConfig = loadSmtpSettingsFile();
+
+  const host = (fileConfig?.host || process.env.SMTP_HOST || '').trim();
+  const rawPort = fileConfig?.port !== undefined ? fileConfig.port : process.env.SMTP_PORT;
+  const port = parseInt(String(rawPort || '465').trim(), 10);
+  const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
+  const pass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
+  const from = (fileConfig?.from || process.env.SMTP_FROM || user || 'noreply@hosting-live-fast.cloud').trim();
+  
+  const secure = fileConfig?.secure !== undefined
+    ? Boolean(fileConfig.secure)
+    : (process.env.SMTP_SECURE === 'true' || (process.env.SMTP_SECURE !== 'false' && port === 465));
 
   const configured = Boolean(host && user && pass);
+  const source: 'file' | 'env' | 'none' = (fileConfig && fileConfig.user && fileConfig.pass)
+    ? 'file'
+    : (process.env.SMTP_USER && process.env.SMTP_PASS ? 'env' : 'none');
 
   // Mask user email for privacy
   const maskedUser = user.includes('@')
@@ -113,10 +170,11 @@ export function getSmtpConfig(): SmtpConfigInfo {
   return {
     configured,
     host: host || 'None',
-    port: isNaN(port) ? 587 : port,
+    port: isNaN(port) ? 465 : port,
     user: maskedUser,
     from,
-    secure
+    secure,
+    source
   };
 }
 
@@ -125,11 +183,18 @@ let lastTransporterConfigKey = '';
 
 // Create or retrieve cached Nodemailer transporter if SMTP credentials are provided
 export function getTransporter(): Transporter | null {
-  const host = (process.env.SMTP_HOST || '').trim();
-  const port = parseInt((process.env.SMTP_PORT || '587').trim(), 10);
-  const user = (process.env.SMTP_USER || '').trim();
-  const pass = (process.env.SMTP_PASS || '').trim();
-  const secure = process.env.SMTP_SECURE === 'true' || (process.env.SMTP_SECURE !== 'false' && port === 465);
+  const fileConfig = loadSmtpSettingsFile();
+  const host = (fileConfig?.host || process.env.SMTP_HOST || '').trim();
+  const rawPort = fileConfig?.port !== undefined ? fileConfig.port : process.env.SMTP_PORT;
+  const port = parseInt(String(rawPort || '465').trim(), 10);
+  const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
+  const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
+  // Strip all whitespace from App Passwords (critical for Google App Passwords like "abcd efgh ijkl mnop")
+  const pass = rawPass.replace(/\s+/g, '');
+
+  const secure = fileConfig?.secure !== undefined
+    ? Boolean(fileConfig.secure)
+    : (process.env.SMTP_SECURE === 'true' || (process.env.SMTP_SECURE !== 'false' && port === 465));
 
   if (!host || !user || !pass) {
     return null;
@@ -141,18 +206,27 @@ export function getTransporter(): Transporter | null {
   }
 
   try {
-    cachedTransporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000
-    });
+    const isGmail = host.toLowerCase().includes('gmail.com') || host.toLowerCase() === 'gmail';
+    const transportOptions: any = isGmail && port === 465
+      ? {
+          service: 'gmail',
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false }
+        }
+      : {
+          host,
+          port,
+          secure,
+          auth: { user, pass },
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 12000,
+          greetingTimeout: 12000,
+          socketTimeout: 15000
+        };
+
+    cachedTransporter = nodemailer.createTransport(transportOptions);
     lastTransporterConfigKey = currentKey;
     return cachedTransporter;
   } catch (err) {
@@ -161,31 +235,51 @@ export function getTransporter(): Transporter | null {
   }
 }
 
+// Diagnose SMTP error message for friendly explanation
+export function explainSmtpError(err: any): string {
+  const msg = err?.message || String(err);
+  if (msg.includes('535') || msg.includes('BadCredentials') || msg.includes('Username and Password not accepted') || msg.includes('Invalid login')) {
+    return 'জিমেইল/SMTP লগইন ব্যর্থ (535 Invalid Login): আপনার গুগল একাউন্টে 2-Step Verification চালু করে একটি ১৬ সংখ্যার App Password তৈরি করে দিন। একাউন্টের সাধারণ পাসওয়ার্ড কাজ করবে না।';
+  }
+  if (msg.includes('ETIMEDOUT') || msg.includes('ESOCKETTIMEDOUT')) {
+    return 'কানেকশন টাইমআউট (ETIMEDOUT): SMTP সার্ভারের সাথে সংযোগের সময় শেষ হয়েছে। পোর্ট (465 বা 587) ও হোস্টের নাম চেক করুন।';
+  }
+  if (msg.includes('ECONNREFUSED')) {
+    return 'কানেকশন প্রত্যাখ্যাত (ECONNREFUSED): প্রদত্ত পোর্টে কোনো SMTP সার্ভার সাড়া দিচ্ছে না।';
+  }
+  if (msg.includes('ENOTFOUND')) {
+    return 'সার্ভার পাওয়া যায়নি (ENOTFOUND): SMTP Host এড্রেস সঠিক নয় (যেমন: smtp.gmail.com)।';
+  }
+  return msg;
+}
+
 // Verify SMTP connection
 export async function verifySmtpConnection(): Promise<{ success: boolean; message: string; details?: any }> {
   const config = getSmtpConfig();
   if (!config.configured) {
     return {
       success: false,
-      message: 'SMTP credentials not configured in .env (Requires SMTP_HOST, SMTP_USER, SMTP_PASS)'
+      message: 'SMTP কনফিগার করা নেই। অনুগ্রহ করে এডমিন প্যানেল থেকে SMTP Host, ইমেইল এবং App Password সেভ করুন।'
     };
   }
 
   const transporter = getTransporter();
   if (!transporter) {
-    return { success: false, message: 'Could not create SMTP transporter instance' };
+    return { success: false, message: 'SMTP ট্রান্সপোর্টার ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে।' };
   }
 
   try {
     await transporter.verify();
     return {
       success: true,
-      message: `SMTP connection established successfully to ${config.host}:${config.port}`
+      message: `✅ SMTP সংযোগ সফল হয়েছে (${config.host}:${config.port})! ইমেইল পাঠানোর জন্য প্রস্তুত।`
     };
   } catch (err: any) {
+    const errorExplanation = explainSmtpError(err);
+    console.error('[SMTP VERIFICATION ERROR]:', err);
     return {
       success: false,
-      message: `SMTP connection verification failed: ${err.message || 'Unknown error'}`
+      message: `SMTP যাচাই ব্যর্থ: ${errorExplanation}`
     };
   }
 }
@@ -218,8 +312,10 @@ export async function sendEmailAlert(options: EmailAlertOptions): Promise<{ succ
   }
 
   // 2. Attempt real SMTP sending if configured
+  const fileConfig = loadSmtpSettingsFile();
+  const config = getSmtpConfig();
   const transporter = getTransporter();
-  const rawFrom = (process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@hosting-live-fast.cloud').trim();
+  const rawFrom = (fileConfig?.from || process.env.SMTP_FROM || fileConfig?.user || process.env.SMTP_USER || 'no-reply@hosting-live-fast.cloud').trim();
   const fromFormatted = rawFrom.includes('<') ? rawFrom : `"hosting-Live Fast" <${rawFrom}>`;
 
   if (transporter) {
@@ -234,12 +330,13 @@ export async function sendEmailAlert(options: EmailAlertOptions): Promise<{ succ
       console.log(`[EMAIL ALERT SENT] To: ${to} | Subject: "${subject}" | MsgId: ${info.messageId}`);
       return { success: true, messageId: info.messageId };
     } catch (err: any) {
-      console.error(`[EMAIL ALERT FAILED] Could not send to ${to}:`, err.message);
-      return { success: false, error: err.message };
+      const errorDetail = explainSmtpError(err);
+      console.error(`[EMAIL ALERT FAILED] Could not send to ${to}:`, errorDetail);
+      return { success: false, error: errorDetail };
     }
   } else {
-    // Graceful logging for development or when SMTP is not yet configured in env
-    console.log(`[EMAIL ALERT SIMULATION] Transporter not configured. (To enable actual sending, set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in .env)`);
+    // Graceful notification for development or when SMTP is not yet configured
+    console.log(`[EMAIL ALERT SIMULATION] SMTP not configured. Stored in in-app notifications. (To send real email, configure SMTP in Admin Panel or .env)`);
     console.log(`[EMAIL ALERT TO: ${to}] Type: ${type} | Subject: "${subject}"`);
     return { success: true, simulated: true };
   }
@@ -250,6 +347,23 @@ export async function sendEmailAlert(options: EmailAlertOptions): Promise<{ succ
  */
 export async function sendTestEmail(toEmail: string): Promise<{ success: boolean; message: string; messageId?: string; error?: string }> {
   const config = getSmtpConfig();
+  if (!config.configured) {
+    return {
+      success: false,
+      message: 'SMTP কনফিগার করা হয়নি! অনুগ্রহ করে এডমিন প্যানেলে আপনার SMTP Host (যেমন smtp.gmail.com), ইমেইল এবং Google App Password দিন।',
+      error: 'SMTP Not Configured'
+    };
+  }
+
+  const transporter = getTransporter();
+  if (!transporter) {
+    return {
+      success: false,
+      message: 'SMTP ট্রান্সপোর্টার তৈরি করা যায়নি। সেটিংস পুনরায় চেক করুন।',
+      error: 'Transporter creation failed'
+    };
+  }
+
   const subject = `🔔 hosting-Live Fast | টেস্ট নোটিফিকেশন (SMTP Test Email)`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #070b14; color: #f8fafc; padding: 28px; border-radius: 16px; border: 1px solid #162035;">
@@ -264,14 +378,14 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
           🎉 আপনার SMTP ইমেইল সার্ভিস সফলভাবে কনফিগার হয়েছে!
         </h2>
         <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin: 0;">
-          এটি একটি টেস্ট ইমেইল। আপনার .env ফাইলের SMTP হোস্ট (<strong>${config.host}</strong>) এবং পোর্ট (<strong>${config.port}</strong>) ব্যবহার করে এই বার্তাটি সফলভাবে পৌঁছানো হয়েছে।
+          এটি একটি টেস্ট ইমেইল। আপনার কনফিগার করা SMTP হোস্ট (<strong>${config.host}</strong>) এবং পোর্ট (<strong>${config.port}</strong>) ব্যবহার করে এই বার্তাটি সফলভাবে পৌঁছানো হয়েছে।
         </p>
       </div>
 
       <div style="background: #0d1527; border: 1px solid #1e2d48; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
         <h3 style="color: #38bdf8; font-size: 14px; margin: 0 0 12px 0; font-weight: 600;">সক্রিয় এলার্ট সুবিধাসমূহ:</h3>
         <ul style="color: #94a3b8; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.8;">
-          <li><strong style="color: #f1f5f9;">ডিপোজিট অ্যাপ্রুভাল এলার্ট:</strong> ইউজারদের বিকাশ, নগদ বা বাইনান্স ডিপোজিট অনুমোদিত হলে স্বয়ংক্রিয় বিস্তারিত ইমেইল পৌঁছে যাবে।</li>
+          <li><strong style="color: #f1f5f9;">ডিপোজিট অ্যাপ্রুভাল এলার্ট:</strong> ইউজারদের বাইনান্স (USDT) ডিপোজিট অনুমোদিত হলে স্বয়ংক্রিয় বিস্তারিত ইমেইল পৌঁছে যাবে।</li>
           <li><strong style="color: #f1f5f9;">হোস্টিং প্ল্যান মেয়াদ সতর্কবার্তা:</strong> প্ল্যানের মেয়াদ শেষ হওয়ার ৩ দিন পূর্বে ও শেষ দিনে ইউজারদের ইমেইল ও ইন-অ্যাপ সতর্কবার্তা পাঠানো হবে।</li>
         </ul>
       </div>
@@ -283,22 +397,34 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
     </div>
   `;
 
-  const sendResult = await sendEmailAlert({
-    to: toEmail,
-    subject,
-    html,
-    text: `hosting-Live Fast SMTP Test Email: Your email notification service is working successfully via ${config.host}:${config.port}!`,
-    type: 'system'
-  });
+  try {
+    const fileConfig = loadSmtpSettingsFile();
+    const rawFrom = (fileConfig?.from || process.env.SMTP_FROM || fileConfig?.user || process.env.SMTP_USER || 'no-reply@hosting-live-fast.cloud').trim();
+    const fromFormatted = rawFrom.includes('<') ? rawFrom : `"hosting-Live Fast" <${rawFrom}>`;
 
-  return {
-    success: sendResult.success,
-    message: sendResult.success
-      ? `টেস্ট ইমেইল সফলভাবে পাঠানো হয়েছে (${toEmail})`
-      : (sendResult.error || 'ইমেইল পাঠাতে ব্যর্থ হয়েছে'),
-    messageId: sendResult.messageId,
-    error: sendResult.error
-  };
+    const info = await transporter.sendMail({
+      from: fromFormatted,
+      to: toEmail,
+      subject,
+      text: `hosting-Live Fast SMTP Test Email: Your email notification service is working successfully via ${config.host}:${config.port}!`,
+      html
+    });
+
+    console.log(`[TEST EMAIL SENT] To: ${toEmail} | MsgId: ${info.messageId}`);
+    return {
+      success: true,
+      message: `টেস্ট ইমেইল সফলভাবে '${toEmail}' এ পাঠানো হয়েছে! (Message ID: ${info.messageId})`,
+      messageId: info.messageId
+    };
+  } catch (err: any) {
+    const explanation = explainSmtpError(err);
+    console.error(`[TEST EMAIL FAILED] Could not send to ${toEmail}:`, err);
+    return {
+      success: false,
+      message: `ইমেইল পাঠাতে ব্যর্থ হয়েছে: ${explanation}`,
+      error: explanation
+    };
+  }
 }
 
 /**
@@ -377,7 +503,7 @@ export async function sendDepositProcessedAlert(
           <p style="color: #94a3b8; font-size: 13px; margin: 0 0 16px 0;">
             ${isDirectPlan ? 'আপনার হোস্টিং প্ল্যান চালু হয়ে গেছে। এখনই নতুন টেলিগ্রাম বট ডিপ্লয় করুন!' : 'আপনার ব্যালেন্স দিয়ে এখনই আপনার পছন্দের হোস্টিং প্যাকেজ কিনতে পারবেন।'}
           </p>
-          <a href="https://ais-dev-ugqwpjiffwsgea7brmxe4b-490933374191.asia-southeast1.run.app" style="display: inline-block; background: #00d293; color: #070b14; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">
+          <a href="#" style="display: inline-block; background: #00d293; color: #070b14; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">
             ${isDirectPlan ? 'বট ডিপ্লয় করুন (Deploy Bot)' : 'হোস্টিং প্ল্যান কিনুন (Buy Plan)'}
           </a>
         </div>
@@ -469,14 +595,14 @@ export async function sendSubscriptionExpirationAlert(
       <div style="background: #111c33; border: 1px solid #1e2d48; padding: 18px; border-radius: 12px; margin-bottom: 24px;">
         <h3 style="color: #38bdf8; margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">বট অবিরাম ২৪/৭ লাইভ রাখতে করণীয়:</h3>
         <ol style="color: #94a3b8; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.8;">
-          <li>একাউন্টে লগইন করে বিকাশ, নগদ বা বাইনান্স দিয়ে ওয়ালেটে ব্যালেন্স যোগ করুন।</li>
+          <li>একাউন্টে লগইন করে বাইনান্স (USDT) দিয়ে ওয়ালেটে ব্যালেন্স যোগ করুন।</li>
           <li>হোস্টিং প্ল্যান পেজে গিয়ে পছন্দের প্যাকেজের নিচে <strong>'প্যাকেজ কিনুন (Buy Plan)'</strong> বাটনে ক্লিক করে সাথে সাথে রিনিউ করুন।</li>
         </ol>
       </div>
 
       <!-- Action Button -->
       <div style="text-align: center; margin-bottom: 24px;">
-        <a href="https://ais-dev-ugqwpjiffwsgea7brmxe4b-490933374191.asia-southeast1.run.app" style="display: inline-block; background: #00d293; color: #070b14; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">
+        <a href="#" style="display: inline-block; background: #00d293; color: #070b14; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">
           প্ল্যান রিনিউ করুন (Renew Plan)
         </a>
       </div>

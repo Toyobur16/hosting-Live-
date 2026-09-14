@@ -3,12 +3,14 @@ import {
   X, ShieldCheck, Users, CheckCircle2, XCircle, Clock, Search,
   RefreshCw, Bot, CreditCard, DollarSign, Settings, AlertTriangle,
   Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert,
-  Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones, BellRing
+  Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones, BellRing,
+  Mail
 } from 'lucide-react';
 import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
 import { AdminBannersManager } from './admin/AdminBannersManager';
 import { AdminSupportManager } from './admin/AdminSupportManager';
 import { AdminNoticesManager } from './admin/AdminNoticesManager';
+import { AdminSmtpManager } from './admin/AdminSmtpManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -25,7 +27,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   lang,
   onBotAction
 }) => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'banners' | 'notices' | 'support' | 'payments' | 'bots'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'pricing' | 'banners' | 'notices' | 'support' | 'payments' | 'bots' | 'smtp'>('requests');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<{
     totalUsers: number;
@@ -33,7 +35,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     runningBots: number;
     pendingRequestsCount: number;
     approvedRequestsCount: number;
-    totalRevenueBdt: number;
+    totalRevenueUsd?: number;
+    totalRevenueBdt?: number;
   } | null>(null);
 
   const [requests, setRequests] = useState<PlanRequest[]>([]);
@@ -410,8 +413,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <p className="text-base sm:text-lg font-black text-emerald-300 mt-0.5">{overview.approvedRequestsCount}</p>
             </div>
             <div className="p-3 rounded-2xl bg-[#0d1524] border border-[#1f2d48] col-span-2 sm:col-span-1">
-              <p className="text-[10px] font-bold text-sky-400 uppercase">{lang === 'bn' ? 'মোট আয় (টাকা)' : 'Total Revenue'}</p>
-              <p className="text-base sm:text-lg font-black text-sky-300 mt-0.5">৳{overview.totalRevenueBdt}</p>
+              <p className="text-[10px] font-bold text-emerald-400 uppercase">{lang === 'bn' ? 'মোট আয় (USDT)' : 'Total Revenue (USDT)'}</p>
+              <p className="text-base sm:text-lg font-black text-emerald-300 mt-0.5">${Number(overview.totalRevenueUsd ?? overview.totalRevenueBdt ?? 0).toFixed(2)} USDT</p>
             </div>
           </div>
         )}
@@ -532,6 +535,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('smtp')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'smtp'
+                ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                : 'bg-[#0d1524] text-slate-400 hover:text-white hover:bg-[#16233b]'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? '📧 SMTP ইমেইল সেটিংস' : 'SMTP Email Setup'}</span>
+          </button>
+
+          <button
             onClick={loadAllAdminData}
             title={lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}
             className="p-2 ml-auto rounded-xl bg-[#0d1524] hover:bg-[#16233b] text-slate-400 hover:text-white transition-colors cursor-pointer"
@@ -609,7 +624,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             {req.planName}
                           </span>
                           <span className="font-black text-emerald-400 text-sm">
-                            {req.currency === 'USD' ? `$${req.amount} USD` : `৳${req.amount} BDT`}
+                            ${req.amount} USDT
                           </span>
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 uppercase font-bold text-[10px]">
                             {req.method}
@@ -701,11 +716,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   {/* Balance Display */}
                   <div className="flex items-center gap-2 text-xs flex-wrap pt-0.5">
                     <span className="text-slate-400">ওয়ালেট ব্যালেন্স:</span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                      ৳{u.balanceBdt || 0} BDT
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
-                      ${u.balanceUsd || 0} USD
+                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold font-mono">
+                      ${Number(u.balanceUsd ?? 0).toFixed(2)} USDT
                     </span>
                   </div>
 
@@ -821,25 +833,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="block font-bold text-emerald-400 mb-1">মূল্য (৳ BDT):</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={newPlanData.priceBdt}
-                      onChange={(e) => setNewPlanData({ ...newPlanData, priceBdt: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-[#0d1627] border border-emerald-500/40 rounded-xl p-2 text-xs text-white font-bold"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-amber-400 mb-1">মূল্য ($ USD):</label>
+                    <label className="block font-bold text-emerald-400 mb-1">মূল্য ($ USDT):</label>
                     <input
                       type="number"
                       min="0"
                       step="0.1"
                       value={newPlanData.priceUsd}
-                      onChange={(e) => setNewPlanData({ ...newPlanData, priceUsd: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-[#0d1627] border border-amber-500/40 rounded-xl p-2 text-xs text-white font-bold"
+                      onChange={(e) => {
+                        const p = parseFloat(e.target.value) || 0;
+                        setNewPlanData({ ...newPlanData, priceUsd: p, priceBdt: Math.round(p * 120) });
+                      }}
+                      className="w-full bg-[#0d1627] border border-emerald-500/40 rounded-xl p-2 text-xs text-white font-bold"
                       required
                     />
                   </div>
@@ -936,8 +940,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-2.5 text-xs">
                       <div>
-                        <label className="block text-[11px] font-bold text-amber-400 mb-1">
-                          মূল্য ($ USD):
+                        <label className="block text-[11px] font-bold text-emerald-400 mb-1">
+                          মূল্য ($ USDT):
                         </label>
                         <input
                           type="number"
@@ -945,29 +949,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           step="0.5"
                           value={p.priceUsd}
                           onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
                             const updated = [...plans];
-                            updated[idx] = { ...updated[idx], priceUsd: parseFloat(e.target.value) || 0 };
+                            updated[idx] = { ...updated[idx], priceUsd: val, priceBdt: Math.round(val * 120) };
                             setPlans(updated);
                           }}
-                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-amber-400 rounded-xl p-2 text-xs text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-emerald-400 mb-1">
-                          মূল্য (৳ BDT):
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="10"
-                          value={p.priceBdt}
-                          onChange={(e) => {
-                            const updated = [...plans];
-                            updated[idx] = { ...updated[idx], priceBdt: parseInt(e.target.value, 10) || 0 };
-                            setPlans(updated);
-                          }}
-                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-emerald-400 rounded-xl p-2 text-xs text-white"
+                          className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-emerald-400 rounded-xl p-2 text-xs text-white font-bold"
                         />
                       </div>
 
@@ -1212,6 +1199,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         {/* Support Inbox & Settings Tab */}
         {activeTab === 'support' && <AdminSupportManager />}
+
+        {/* SMTP Email Settings Tab */}
+        {activeTab === 'smtp' && <AdminSmtpManager lang={lang} />}
 
       </div>
     </div>

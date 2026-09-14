@@ -23,7 +23,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({
 }) => {
   const [plans, setPlans] = useState<HostingPlan[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState<'USD' | 'BDT'>('USD');
+  const [selectedCurrency] = useState<'USD'>('USD');
   const [purchasingPlanId, setPurchasingPlanId] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
@@ -72,8 +72,8 @@ export const PlansPage: React.FC<PlansPageProps> = ({
       return;
     }
 
-    const price = selectedCurrency === 'USD' ? (plan.priceUsd || 1.5) : (plan.priceBdt || 150);
-    const currentBalance = selectedCurrency === 'USD' ? (user.balanceUsd || 0) : (user.balanceBdt || 0);
+    const price = plan.priceUsd || 1.5;
+    const currentBalance = user.balanceUsd || 0;
 
     if (currentBalance < price) {
       setInsufficientBalancePlan(plan);
@@ -152,7 +152,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-semibold">{lang === 'bn' ? 'ওয়ালেট ব্যালেন্স:' : 'Wallet Balance:'}</span>
               <span className="text-emerald-400 font-black text-sm">
-                ${user ? (user.balanceUsd || 0).toFixed(2) : '0.00'} USD
+                ${user ? (user.balanceUsd || 0).toFixed(2) : '0.00'} USDT
               </span>
             </div>
 
@@ -170,8 +170,8 @@ export const PlansPage: React.FC<PlansPageProps> = ({
               onClick={onNavigateToWallet}
               className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-slate-700 transition-colors"
             >
-              <Wallet className="w-3.5 h-3.5 text-amber-400" />
-              <span>{lang === 'bn' ? 'ডিপোজিট করুন / ওয়ালেট' : 'Deposit USD / Wallet'}</span>
+              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{lang === 'bn' ? 'USDT ডিপোজিট করুন' : 'Deposit USDT / Wallet'}</span>
             </button>
           </div>
         </div>
@@ -181,10 +181,10 @@ export const PlansPage: React.FC<PlansPageProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 bg-slate-100 dark:bg-[#111827] border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-2xl">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-            {lang === 'bn' ? 'মূল্য মুদ্রা:' : 'Currency:'}
+            {lang === 'bn' ? 'মুদ্রা:' : 'Currency:'}
           </span>
           <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-black">
-            USDT ($ USD)
+            USDT ($)
           </span>
         </div>
 
@@ -372,7 +372,7 @@ export const PlansPage: React.FC<PlansPageProps> = ({
               </div>
               <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between text-xs">
                 <span className="text-slate-500 dark:text-slate-400">{lang === 'bn' ? 'আপনার বর্তমান ব্যালেন্স:' : 'Your Balance:'}</span>
-                <span className="font-bold text-slate-900 dark:text-white">${(user?.balanceUsd || 0).toFixed(2)} USD</span>
+                <span className="font-bold text-slate-900 dark:text-white">${(user?.balanceUsd || 0).toFixed(2)} USDT</span>
               </div>
             </div>
 
@@ -456,13 +456,13 @@ export const PlansPage: React.FC<PlansPageProps> = ({
               <div className="flex justify-between text-xs">
                 <span className="text-slate-600 dark:text-slate-400">{lang === 'bn' ? 'আপনার বর্তমান ব্যালেন্স:' : 'Current Balance:'}</span>
                 <span className="font-bold text-slate-900 dark:text-white">
-                  ${(user?.balanceUsd || 0).toFixed(2)} USD
+                  ${(user?.balanceUsd || 0).toFixed(2)} USDT
                 </span>
               </div>
               <div className="pt-2 border-t border-amber-200 dark:border-amber-800 flex justify-between text-xs font-bold text-amber-800 dark:text-amber-300">
                 <span>{lang === 'bn' ? 'প্রয়োজনীয় বাকি ডলার:' : 'Needed Amount:'}</span>
                 <span>
-                  ${Math.max(0, (insufficientBalancePlan.priceUsd || 1.5) - (user?.balanceUsd || 0)).toFixed(2)} USD
+                  ${Math.max(0, (insufficientBalancePlan.priceUsd || 1.5) - (user?.balanceUsd || 0)).toFixed(2)} USDT
                 </span>
               </div>
             </div>

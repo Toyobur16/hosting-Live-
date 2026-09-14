@@ -73,8 +73,8 @@ export function AppStoreHeader({
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#162035] transition-colors">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
-        {/* Left Branding: hosting-Live Fast */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Left Branding: hosting-Live Fast & USDT Balance Button */}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => onSelectTab('home')}
             className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-hidden"
@@ -90,6 +90,23 @@ export function AppStoreHeader({
                 {lang === 'bn' ? '২৪/৭ ক্লাউড বট হোস্টিং' : '24/7 Cloud Bot & Web Hosting'}
               </span>
             </div>
+          </button>
+
+          {/* Balance Button right beside Website Name */}
+          <button
+            id="brand-usdt-balance-button"
+            type="button"
+            onClick={() => (user ? onSelectTab('wallet') : onOpenAuthModal())}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-600 dark:text-[#00d293] cursor-pointer transition-all shadow-xs hover:scale-102"
+            title={user ? (lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট দেখুন' : 'View USDT Wallet & Deposit') : (lang === 'bn' ? 'লগইন করুন' : 'Login to view balance')}
+          >
+            <Wallet className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="font-extrabold tracking-tight">
+              ${user ? Number(user.balanceUsd || 0).toFixed(2) : '0.00'}
+            </span>
+            <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider">
+              USDT
+            </span>
           </button>
         </div>
 
@@ -185,13 +202,13 @@ export function AppStoreHeader({
           {user && (
             <button
               onClick={() => onSelectTab('wallet')}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#0f1b2b] hover:bg-slate-200 dark:hover:bg-[#142338] border border-slate-200 dark:border-[#00d293]/30 text-xs font-bold text-slate-800 dark:text-[#00d293] cursor-pointer transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#0f1b2b] hover:bg-slate-200 dark:hover:bg-[#142338] border border-slate-200 dark:border-[#00d293]/30 text-xs font-bold text-slate-800 dark:text-[#00d293] cursor-pointer transition-all"
               title={lang === 'bn' ? 'ওয়ালেট ও ডিপোজিট দেখুন' : 'View Wallet & Deposit'}
             >
               <Wallet className="w-3.5 h-3.5 text-[#00d293]" />
-              <span>৳{user.balanceBdt || 0}</span>
-              <span className="hidden sm:inline text-[10px] text-slate-500 dark:text-slate-400">
-                (${user.balanceUsd || 0})
+              <span className="font-extrabold">${(user.balanceUsd || 0).toFixed(2)}</span>
+              <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold uppercase">
+                USDT
               </span>
             </button>
           )}

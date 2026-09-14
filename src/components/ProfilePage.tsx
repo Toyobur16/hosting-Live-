@@ -97,11 +97,11 @@ export function ProfilePage({
         <div>
           <span className="text-xs font-bold text-slate-400 flex items-center gap-2">
             <Wallet className="w-4 h-4 text-[#00d293]" />
-            <span>মোট ওয়ালেট ব্যালেন্স</span>
+            <span>মোট ওয়ালেট ব্যালেন্স (USDT)</span>
           </span>
           <div className="flex items-baseline gap-2.5 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-white">৳{user.balanceBdt || 0}</span>
-            <span className="text-sm font-bold text-[#00d293]">(${user.balanceUsd || 0} USD)</span>
+            <span className="text-2xl sm:text-3xl font-black text-white">${Number(user.balanceUsd || 0).toFixed(2)}</span>
+            <span className="text-xs font-black px-2 py-0.5 rounded-md bg-emerald-500/20 text-[#00d293] uppercase">USDT</span>
           </div>
         </div>
 
@@ -109,7 +109,7 @@ export function ProfilePage({
           onClick={onNavigateToWallet}
           className="px-5 py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs cursor-pointer shadow-md transition-all hover:scale-102 self-start sm:self-center"
         >
-          + টাকা ডিপোজিট করুন
+          + USDT ডিপোজিট করুন
         </button>
       </div>
 

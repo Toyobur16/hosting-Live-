@@ -107,7 +107,7 @@ export function MarketplacePage({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ currency: 'BDT' })
+        body: JSON.stringify({ currency: 'USD' })
       });
 
       const data = await res.json();
@@ -115,7 +115,7 @@ export function MarketplacePage({
         if (data.needsDeposit) {
           setMessage({
             type: 'error',
-            text: `পর্যাপ্ত ব্যালেন্স নেই! প্রয়োজন: ৳${item.priceBdt} BDT। অনুগ্রহ করে ওয়ালেটে টাকা জমা দিন।`
+            text: `পর্যাপ্ত ব্যালেন্স নেই! প্রয়োজন: $${item.priceUsd} USDT। অনুগ্রহ করে ওয়ালেটে USDT জমা দিন।`
           });
         } else {
           setMessage({ type: 'error', text: data.error || 'কেনা সম্ভব হয়নি।' });
@@ -280,10 +280,10 @@ export function MarketplacePage({
                   <div className="pt-2 flex items-center justify-between">
                     <div>
                       <span className="text-base font-black text-[#00d293]">
-                        ৳{item.priceBdt}
+                        ${item.priceUsd}
                       </span>
-                      <span className="text-[10px] text-slate-400 ml-1">
-                        (${item.priceUsd})
+                      <span className="text-[10px] text-emerald-400 font-bold ml-1 uppercase">
+                        USDT
                       </span>
                     </div>
 
@@ -351,12 +351,12 @@ export function MarketplacePage({
             <div className="p-3.5 rounded-2xl bg-[#070b14] border border-[#1e293b] space-y-2">
               <div className="flex justify-between text-xs text-slate-400">
                 <span>মূল্য (Price):</span>
-                <span className="font-bold text-white">৳{selectedItem.priceBdt} BDT (${selectedItem.priceUsd} USD)</span>
+                <span className="font-bold text-white">${selectedItem.priceUsd} USDT</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400">
                 <span>আপনার ওয়ালেট ব্যালেন্স:</span>
                 <span className="font-bold text-[#00d293]">
-                  ৳{user?.balanceBdt || 0} BDT (${user?.balanceUsd || 0} USD)
+                  ${(user?.balanceUsd || 0).toFixed(2)} USDT
                 </span>
               </div>
             </div>
@@ -410,7 +410,7 @@ export function MarketplacePage({
 
               {!downloadLink && (
                 <>
-                  {(user?.balanceBdt || 0) < selectedItem.priceBdt ? (
+                  {(user?.balanceUsd || 0) < selectedItem.priceUsd ? (
                     <button
                       onClick={() => {
                         setSelectedItem(null);
@@ -419,7 +419,7 @@ export function MarketplacePage({
                       className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shadow-lg cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Zap className="w-3.5 h-3.5" />
-                      <span>টাকা ডিপোজিট করুন</span>
+                      <span>USDT ডিপোজিট করুন</span>
                     </button>
                   ) : (
                     <button

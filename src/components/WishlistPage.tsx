@@ -58,7 +58,7 @@ export function WishlistPage({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ currency: 'BDT' })
+        body: JSON.stringify({ currency: 'USD' })
       });
 
       const data = await res.json();
@@ -154,8 +154,8 @@ export function WishlistPage({
 
                 <div className="pt-2 flex items-center justify-between border-t border-[#1e293b]">
                   <div>
-                    <span className="text-base font-black text-[#00d293]">৳{item.priceBdt}</span>
-                    <span className="text-[10px] text-slate-400 ml-1">(${item.priceUsd})</span>
+                    <span className="text-base font-black text-[#00d293]">${item.priceUsd}</span>
+                    <span className="text-[10px] text-emerald-400 uppercase font-bold ml-1">USDT</span>
                   </div>
 
                   <button

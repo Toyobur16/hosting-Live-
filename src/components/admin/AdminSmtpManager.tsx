@@ -1,0 +1,503 @@
+import React, { useState, useEffect } from 'react';
+import { Mail, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Send, Lock, Key, Server, HelpCircle, Eye, EyeOff } from 'lucide-react';
+
+interface AdminSmtpManagerProps {
+  lang?: 'bn' | 'en';
+}
+
+export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' }) => {
+  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [statusData, setStatusData] = useState<{
+    configured: boolean;
+    connected?: boolean;
+    message?: string;
+    config?: {
+      host: string;
+      port: number;
+      user: string;
+      from: string;
+      secure: boolean;
+      source?: string;
+    };
+  } | null>(null);
+
+  const [formData, setFormData] = useState({
+    host: 'smtp.gmail.com',
+    port: 465,
+    user: '',
+    pass: '',
+    from: '',
+    secure: true
+  });
+
+  const [testEmail, setTestEmail] = useState('');
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    error?: string;
+  } | null>(null);
+
+  const [saveResult, setSaveResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  const token = localStorage.getItem('bot_auth_token');
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`
+  };
+
+  useEffect(() => {
+    fetchSmtpStatus();
+  }, []);
+
+  const fetchSmtpStatus = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch settings for form
+      const settRes = await fetch('/api/admin/smtp-settings', { headers: authHeaders });
+      if (settRes.ok) {
+        const settData = await settRes.json();
+        if (settData.settings) {
+          setFormData({
+            host: settData.settings.host || 'smtp.gmail.com',
+            port: settData.settings.port || 465,
+            user: settData.settings.user || '',
+            pass: settData.settings.pass || '',
+            from: settData.settings.from || '',
+            secure: settData.settings.secure !== undefined ? settData.settings.secure : true
+          });
+          if (settData.settings.user && !testEmail) {
+            setTestEmail(settData.settings.user);
+          }
+        }
+      }
+
+      // 2. Fetch live status
+      const statRes = await fetch('/api/admin/smtp-status', { headers: authHeaders });
+      if (statRes.ok) {
+        const statData = await statRes.json();
+        setStatusData(statData);
+      }
+    } catch (err: any) {
+      console.error('Error fetching SMTP settings:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setSaveResult(null);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/admin/smtp-settings', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSaveResult({
+          success: true,
+          message: data.message + (data.connected ? ' (সার্ভারের সাথে সফলভাবে সংযুক্ত)' : ' (সতর্কতা: সংযোগ ব্যর্থ)')
+        });
+        setStatusData({
+          configured: true,
+          connected: data.connected,
+          message: data.verifyMessage,
+          config: data.config
+        });
+      } else {
+        setSaveResult({
+          success: false,
+          message: data.error || 'সংরক্ষণ ব্যর্থ হয়েছে'
+        });
+      }
+    } catch (err: any) {
+      setSaveResult({
+        success: false,
+        message: err.message || 'সংরক্ষণকালে সমস্যা হয়েছে'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail || !testEmail.includes('@')) {
+      alert(lang === 'bn' ? 'দয়া করে একটি সঠিক ইমেইল এড্রেস লিখুন।' : 'Please enter a valid email address.');
+      return;
+    }
+
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/admin/smtp-test', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ email: testEmail })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: data.message || 'টেস্ট ইমেইল সফলভাবে পাঠানো হয়েছে!'
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || 'ইমেইল পাঠানো যায়নি',
+          error: data.details?.error || data.error
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'টেস্ট ইমেইল পাঠানোর সময়ে নেটওয়ার্ক সমস্যা হয়েছে।'
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const applyPreset = (type: 'gmail-ssl' | 'gmail-tls' | 'custom') => {
+    if (type === 'gmail-ssl') {
+      setFormData((prev) => ({
+        ...prev,
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true
+      }));
+    } else if (type === 'gmail-tls') {
+      setFormData((prev) => ({
+        ...prev,
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        host: 'mail.yourdomain.com',
+        port: 587,
+        secure: false
+      }));
+    }
+  };
+
+  return (
+    <div className="space-y-6 text-white pb-6 animate-in fade-in duration-200">
+      
+      {/* Header & Status Card */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#090f1d] border border-[#1e2d48] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/5">
+            <Mail className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-white flex items-center gap-2">
+              <span>{lang === 'bn' ? 'SMTP ইমেইল নোটিফিকেশন কনফিগারেশন' : 'SMTP Email Alerts Setup'}</span>
+              {statusData?.configured ? (
+                statusData?.connected ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>{lang === 'bn' ? 'সক্রিয় ও সংযুক্ত' : 'Active & Connected'}</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{lang === 'bn' ? 'সংযোগ ত্রুটি' : 'Connection Error'}</span>
+                  </span>
+                )
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  {lang === 'bn' ? 'কনফিগার করা হয়নি' : 'Not Configured'}
+                </span>
+              )}
+            </h4>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {lang === 'bn'
+                ? 'ডিপোজিট অ্যাপ্রুভাল ও হোস্টিং মেয়াদের সতর্কবার্তা সরাসরি গ্রাহকের জিমেইলে পাঠাতে এটি প্রয়োজন।'
+                : 'Send real-time deposit approval and plan expiration alerts to customer email inboxes.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={fetchSmtpStatus}
+          disabled={loading}
+          className="px-3.5 py-1.5 rounded-xl bg-[#16233b] hover:bg-[#1e3052] border border-[#223657] text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>{lang === 'bn' ? 'রিফ্রেশ স্ট্যাটাস' : 'Refresh Status'}</span>
+        </button>
+      </div>
+
+      {/* Diagnostics / Connection Message Banner */}
+      {statusData?.message && (
+        <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+          statusData.connected
+            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+            : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+        }`}>
+          {statusData.connected ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+          )}
+          <div className="flex-1 leading-relaxed">
+            <strong>{lang === 'bn' ? 'সার্ভার ডায়াগনস্টিক রিপোর্ট:' : 'Server Diagnostics:'}</strong> {statusData.message}
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Settings Form & Quick Test */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        {/* Settings Form Column */}
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-[#0b1222] border border-[#1f2d48] space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1b2840]">
+            <h5 className="text-sm font-bold text-white flex items-center gap-2">
+              <Server className="w-4 h-4 text-emerald-400" />
+              <span>{lang === 'bn' ? 'SMTP সার্ভার সেটিংস' : 'SMTP Server Settings'}</span>
+            </h5>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="text-slate-400 mr-1">{lang === 'bn' ? 'প্রিসেট:' : 'Presets:'}</span>
+              <button
+                type="button"
+                onClick={() => applyPreset('gmail-ssl')}
+                className="px-2 py-0.5 rounded-lg bg-[#162238] hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 cursor-pointer font-medium"
+              >
+                Gmail 465 (SSL)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('gmail-tls')}
+                className="px-2 py-0.5 rounded-lg bg-[#162238] hover:bg-sky-600/30 text-sky-400 border border-sky-500/20 cursor-pointer font-medium"
+              >
+                Gmail 587 (TLS)
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveSettings} className="space-y-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  SMTP Host (সার্ভার এড্রেস) *
+                </label>
+                <input
+                  type="text"
+                  value={formData.host}
+                  onChange={(e) => setFormData({ ...formData, host: e.target.value })}
+                  placeholder="smtp.gmail.com"
+                  className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Port (পোর্ট) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.port}
+                  onChange={(e) => {
+                    const port = parseInt(e.target.value, 10) || 465;
+                    setFormData({
+                      ...formData,
+                      port,
+                      secure: port === 465
+                    });
+                  }}
+                  placeholder="465 বা 587"
+                  className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                User / Email (প্রেরক জিমেইল / ইমেইল) *
+              </label>
+              <input
+                type="email"
+                value={formData.user}
+                onChange={(e) => setFormData({ ...formData, user: e.target.value })}
+                placeholder="badsha30k@gmail.com"
+                className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                required
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Password / Google App Password (১৬ সংখ্যার অ্যাপ পাসওয়ার্ড) *</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showPassword ? 'Hide' : 'Show'}</span>
+                </button>
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={formData.pass}
+                onChange={(e) => setFormData({ ...formData, pass: e.target.value })}
+                placeholder="abcd efgh ijkl mnop (Google App Password)"
+                className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                required
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                💡 <strong className="text-amber-300">টিপস:</strong> জিমেইল ব্যবহার করলে সাধারণ গুগল পাসওয়ার্ড কাজ করবে না। আপনার গুগল একাউন্টে ২-স্টেপ চালু করে ১৬ সংখ্যার App Password তৈরি করে এখানে দিন। স্পেস থাকলে স্বয়ংক্রিয়ভাবে মুছে যাবে।
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Sender From Title (প্রেরকের নাম)
+                </label>
+                <input
+                  type="text"
+                  value={formData.from}
+                  onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+                  placeholder='"hosting-Live Fast" <badsha30k@gmail.com>'
+                  className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center pt-5">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={formData.secure}
+                    onChange={(e) => setFormData({ ...formData, secure: e.target.checked })}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-0 focus:outline-none"
+                  />
+                  <span>SSL / TLS এনক্রিপশন সক্রিয় (Port 465 এর জন্য রিকমেন্ডেড)</span>
+                </label>
+              </div>
+            </div>
+
+            {saveResult && (
+              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                saveResult.success ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+              }`}>
+                {saveResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>{saveResult.message}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/10 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+            >
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+              <span>{saving ? 'সংরক্ষণ ও সংযোগ পরীক্ষা হচ্ছে...' : 'সেটিংস সেভ করুন ও সংযোগ পরীক্ষা করুন (Save & Test Connection)'}</span>
+            </button>
+          </form>
+        </div>
+
+        {/* Live Test Email & Guide Column */}
+        <div className="space-y-4">
+          
+          {/* Send Live Test Email Card */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#0b1222] border border-[#1f2d48] space-y-3">
+            <h5 className="text-sm font-bold text-white flex items-center gap-2">
+              <Send className="w-4 h-4 text-sky-400" />
+              <span>{lang === 'bn' ? 'লাইভ টেস্ট ইমেইল পাঠান' : 'Send Live Test Email'}</span>
+            </h5>
+            <p className="text-xs text-slate-400">
+              {lang === 'bn'
+                ? 'কনফিগারেশনের পর নিচের বক্সে আপনার ইমেইল দিয়ে একটি রিয়েল টেস্ট বার্তা পাঠিয়ে চেক করুন।'
+                : 'Send a real email to verify that your inbox receives alerts correctly.'}
+            </p>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                প্রাপক ইমেইল এড্রেস (Recipient Email):
+              </label>
+              <input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="badsha30k@gmail.com"
+                className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSendTestEmail}
+              disabled={testing}
+              className="w-full py-2.5 rounded-xl bg-[#0088cc] hover:bg-[#0099e6] text-white font-bold text-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-all"
+            >
+              {testing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              <span>{testing ? 'ইমেইল পাঠানো হচ্ছে...' : 'টেস্ট ইমেইল পাঠান (Send Test)'}</span>
+            </button>
+
+            {testResult && (
+              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+                testResult.success
+                  ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+              }`}>
+                <div className="flex items-center gap-2 font-bold">
+                  {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
+                  <span>{testResult.success ? 'সফল!' : 'ব্যর্থ'}</span>
+                </div>
+                <p className="leading-relaxed">{testResult.message}</p>
+                {testResult.error && (
+                  <p className="text-[11px] font-mono opacity-80 pt-1 border-t border-rose-500/20">
+                    {testResult.error}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Guide on App Password */}
+          <div className="p-4 rounded-2xl bg-[#090f1e] border border-[#1c2a44] space-y-2.5">
+            <h6 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <HelpCircle className="w-4 h-4" />
+              <span>জিমেইল App Password কিভাবে তৈরি করবেন?</span>
+            </h6>
+            <ol className="text-[11px] text-slate-300 space-y-1.5 pl-4 list-decimal leading-relaxed">
+              <li>আপনার গুগল একাউন্টের <strong>Security</strong> ট্যাবে যান।</li>
+              <li><strong>2-Step Verification</strong> চালু করুন।</li>
+              <li>সার্চ বারে <strong>'App passwords'</strong> লিখে সার্চ করুন।</li>
+              <li>অ্যাপের নাম দিন <code>HostingLive</code> এবং Create ক্লিক করুন।</li>
+              <li>প্রাপ্ত ১৬ সংখ্যার হলুদ কোডটি কপি করে উপরের পাসওয়ার্ড বক্সে পেস্ট করুন।</li>
+            </ol>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+};
