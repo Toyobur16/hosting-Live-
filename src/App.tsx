@@ -269,17 +269,22 @@ export default function App() {
           setShowAdminModal(true);
         } else if (!currentUser) {
           setShowAuthModal(true);
-          setToastMessage(
-            lang === 'bn'
-              ? 'গোপন এডমিন প্যানেল ওপেন করতে আপনার অনুমোদিত এডমিন অ্যাকাউন্ট দিয়ে লগইন করুন।'
-              : 'Please log in with your authorized admin account to access the private admin portal.'
-          );
         } else {
-          setToastMessage(
-            lang === 'bn'
-              ? 'অ্যাক্সেস ডিনাইড: এই অ্যাকাউন্টটির এডমিন পারমিশন নেই।'
-              : 'Access Denied: Your account does not have admin permissions.'
-          );
+          // Regular user is logged in. They do not need or expect any admin permission messages.
+          // Silently remove any lingering admin query parameters, hash, or path from the URL
+          // so the user smoothly stays on their regular dashboard without any annoying warnings.
+          try {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('admin');
+            cleanUrl.searchParams.delete('portal');
+            if (cleanUrl.hash === '#admin' || cleanUrl.hash === '#admin-portal') {
+              cleanUrl.hash = '';
+            }
+            if (cleanUrl.pathname === '/admin' || cleanUrl.pathname.startsWith('/admin/')) {
+              cleanUrl.pathname = '/';
+            }
+            window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+          } catch {}
         }
       }
     };
