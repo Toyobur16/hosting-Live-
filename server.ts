@@ -4644,6 +4644,25 @@ setInterval(async () => {
   }
 }, 30000);
 
+// Robots.txt & Sitemap routes for Google Search Console & SEO crawlers
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send('User-agent: *\nAllow: /\nSitemap: https://hosting-free-live.onrender.com/sitemap.xml\n');
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://hosting-free-live.onrender.com/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+});
+
 // Admin Direct URL Route: allows visiting /admin directly in browser
 app.get(['/admin', '/admin/login'], (req, res) => {
   res.redirect('/?admin=true');
