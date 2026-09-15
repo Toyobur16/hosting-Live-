@@ -384,7 +384,7 @@ function getFreeTrialSettings() {
 }
 
 function saveFreeTrialSettings(data: any) {
-  fs.writeFileSync(FREE_TRIAL_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  fs.writeFileSync(FREE_TRIAL_SETTINGS_FILE, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 if (!fs.existsSync(FREE_TRIAL_SETTINGS_FILE)) {

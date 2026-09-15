@@ -179,10 +179,10 @@ export function SidebarDrawer({
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#162035] transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#162035] transition-colors cursor-pointer flex items-center justify-center shrink-0"
                 title="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4.5 h-4.5 shrink-0" />
               </button>
             </div>
 
@@ -275,7 +275,7 @@ export function SidebarDrawer({
             </div>
 
             {/* Navigation List */}
-            <div className="py-3 px-3 space-y-1">
+            <div className="py-3 px-3 space-y-1.5">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -290,7 +290,7 @@ export function SidebarDrawer({
                         onSelectTab(item.id);
                       }
                     }}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#00d293] text-slate-950 font-black shadow-md'
                         : item.isAction
@@ -298,15 +298,15 @@ export function SidebarDrawer({
                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#111827] hover:text-slate-950 dark:hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-[#00d293]'}`} />
-                      <span>{item.label}</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-slate-950' : 'text-[#00d293]'}`} />
+                      <span className="truncate">{item.label}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {item.badge && (
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
                             isActive
                               ? 'bg-slate-950 text-white'
                               : 'bg-slate-200 dark:bg-[#1c273e] text-slate-700 dark:text-slate-300'
@@ -315,7 +315,7 @@ export function SidebarDrawer({
                           {item.badge}
                         </span>
                       )}
-                      <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      <ChevronRight className="w-3.5 h-3.5 opacity-50 shrink-0" />
                     </div>
                   </button>
                 );
@@ -332,14 +332,14 @@ export function SidebarDrawer({
                   onClose();
                   onOpenAdminModal();
                 }}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-black transition-all cursor-pointer shadow-xs"
+                className="w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-black transition-all cursor-pointer shadow-xs"
               >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-amber-500" />
-                  <span>{lang === 'bn' ? 'এডমিন ম্যানেজমেন্ট প্যানেল' : 'Admin Management Panel'}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Shield className="w-4.5 h-4.5 text-amber-500 shrink-0" />
+                  <span className="truncate">{lang === 'bn' ? 'এডমিন ম্যানেজমেন্ট প্যানেল' : 'Admin Management Panel'}</span>
                 </div>
                 {pendingRequestsCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black shrink-0 ml-2">
                     {pendingRequestsCount}
                   </span>
                 )}
@@ -352,9 +352,9 @@ export function SidebarDrawer({
                   onClose();
                   onLogout();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                className="w-full min-h-[40px] flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4 shrink-0" />
                 <span>{lang === 'bn' ? 'লগআউট করুন' : 'Sign Out'}</span>
               </button>
             ) : (
@@ -363,7 +363,7 @@ export function SidebarDrawer({
                   onClose();
                   onOpenAuthModal();
                 }}
-                className="w-full py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer"
+                className="w-full min-h-[42px] py-2.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer flex items-center justify-center"
               >
                 {lang === 'bn' ? 'একাউন্টে লগইন করুন' : 'Log In / Register'}
               </button>

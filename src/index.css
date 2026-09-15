@@ -2,6 +2,25 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Crucial: Prevent any SVG or Lucide icon from shrinking or being crushed in flex containers */
+svg {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Ensure mobile buttons and interactive elements maintain proper touch behavior */
+button, a, [role="button"], input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent unwanted horizontal overflow on mobile screens */
+body {
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
+}
+
 @layer base {
   * {
     border-color: var(--border, rgba(226, 232, 240, 0.8));
