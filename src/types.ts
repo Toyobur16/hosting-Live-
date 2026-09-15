@@ -189,6 +189,22 @@ export interface HostedBot {
   fileCount?: number;
   error?: string;
   env?: Record<string, string>;
+  currentVersion?: string;
+  deploymentCount?: number;
+}
+
+export interface DeploymentRecord {
+  id: string;
+  botId: string;
+  version: string;
+  timestamp: string;
+  trigger: 'initial_deploy' | 'code_update' | 'file_upload' | 'zip_upload' | 'safe_update' | 'manual_deploy' | 'restart' | string;
+  status: 'active' | 'success' | 'failed';
+  entryFile?: string;
+  description?: string;
+  deployedBy?: string;
+  filesCount?: number;
+  commitHash?: string;
 }
 
 export interface BotStatus {

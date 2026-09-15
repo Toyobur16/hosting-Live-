@@ -21,7 +21,9 @@ import {
   User,
   Search,
   ExternalLink,
-  Code2
+  Code2,
+  History,
+  Tag
 } from 'lucide-react';
 import { HostedBot } from '../types';
 
@@ -36,6 +38,7 @@ interface BotListProps {
   onOpenNewBotModal: () => void;
   onOpenFileEditor?: (botId: string) => void;
   onOpenSafeUpload?: (bot: HostedBot) => void;
+  onOpenDeployments?: (botId: string) => void;
   hasActivePlan?: boolean;
   onOpenPlans?: () => void;
   lang: 'bn' | 'en';
@@ -52,6 +55,7 @@ export const BotList: React.FC<BotListProps> = ({
   onOpenNewBotModal,
   onOpenFileEditor,
   onOpenSafeUpload,
+  onOpenDeployments,
   hasActivePlan = false,
   onOpenPlans,
   lang
@@ -361,6 +365,28 @@ export const BotList: React.FC<BotListProps> = ({
                       </span>
                     </div>
 
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        <Tag className="w-3.5 h-3.5 text-purple-500" />
+                        <span>{lang === 'bn' ? 'বর্তমান ভার্সন:' : 'Version:'}</span>
+                      </span>
+                      {onOpenDeployments ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDeployments(bot.id)}
+                          className="font-mono text-purple-700 dark:text-purple-300 font-bold bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800 transition-colors flex items-center gap-1 cursor-pointer"
+                          title={lang === 'bn' ? 'ডিপ্লয়মেন্ট হিস্ট্রি দেখুন' : 'View deployment history'}
+                        >
+                          <History className="w-3 h-3 text-purple-500" />
+                          <span>{bot.currentVersion || 'v1.0.0'}</span>
+                        </button>
+                      ) : (
+                        <span className="font-mono text-purple-700 dark:text-purple-300 font-bold bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800">
+                          {bot.currentVersion || 'v1.0.0'}
+                        </span>
+                      )}
+                    </div>
+
                     <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-[#1f293d]">
                       <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -410,7 +436,7 @@ export const BotList: React.FC<BotListProps> = ({
                   </div>
 
                   {/* Tier 2: Developer & Management Controls */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {/* Live Console button */}
                     <button
                       onClick={() => onSelectBot(bot.id)}
@@ -450,6 +476,19 @@ export const BotList: React.FC<BotListProps> = ({
                       </button>
                     ) : (
                       <div />
+                    )}
+
+                    {/* Deployment History Button */}
+                    {onOpenDeployments && (
+                      <button
+                        id={`btn-deployments-${bot.id}`}
+                        onClick={() => onOpenDeployments(bot.id)}
+                        className="py-2 px-2 rounded-xl text-xs font-semibold bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                        title={lang === 'bn' ? 'ডিপ্লয়মেন্ট হিস্ট্রি ও ভার্সন কন্ট্রোল' : 'Deployment History & Versions'}
+                      >
+                        <History className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                        <span>{lang === 'bn' ? 'হিস্ট্রি' : 'History'}</span>
+                      </button>
                     )}
                   </div>
 

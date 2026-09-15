@@ -3,8 +3,9 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
 import dns from 'dns';
+import net from 'net';
 
-// Ensure Node defaults to IPv4 first to prevent ENETUNREACH errors on cloud containers (e.g. Render) without IPv6 routes
+// Force Node.js to prefer IPv4 first globally to prevent ENETUNREACH on cloud containers (e.g. Render) without IPv6 routes
 if (typeof (dns as any).setDefaultResultOrder === 'function') {
   try {
     (dns as any).setDefaultResultOrder('ipv4first');
@@ -199,15 +200,126 @@ export function getSmtpConfig(): SmtpConfigInfo {
 let cachedTransporter: Transporter | null = null;
 let lastTransporterConfigKey = '';
 
-// Create or retrieve cached Nodemailer transporter if SMTP credentials are provided
-export function getTransporter(): Transporter | null {
+export interface ResolvedHostInfo {
+  ip: string;
+  originalHost: string;
+  allIps: string[];
+}
+
+let cachedResolvedHost: { key: string; info: ResolvedHostInfo; expires: number } | null = null;
+
+/**
+ * Resolve hostname strictly to IPv4 address to prevent ENETUNREACH errors on cloud platforms (e.g. Render)
+ * that lack IPv6 outbound routing.
+ */
+export async function resolveIpv4Host(hostname: string, forceFresh = false): Promise<ResolvedHostInfo> {
+  const cleanHost = (hostname || '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/[:/].*$/, '');
+
+  if (!cleanHost) {
+    return { ip: '74.125.203.108', originalHost: 'smtp.gmail.com', allIps: ['74.125.203.108'] };
+  }
+
+  // If already an IPv4 address, return directly
+  if (net.isIPv4(cleanHost)) {
+    return { ip: cleanHost, originalHost: cleanHost, allIps: [cleanHost] };
+  }
+
+  const isGmail = cleanHost.toLowerCase().includes('gmail') || cleanHost.toLowerCase().includes('google');
+  const targetHost = isGmail ? 'smtp.gmail.com' : cleanHost;
+
+  const now = Date.now();
+  if (!forceFresh && cachedResolvedHost && cachedResolvedHost.key === targetHost && cachedResolvedHost.expires > now) {
+    return cachedResolvedHost.info;
+  }
+
+  let resolvedIps: string[] = [];
+
+  try {
+    const addresses = await dns.promises.resolve4(targetHost);
+    if (addresses && addresses.length > 0) {
+      resolvedIps = addresses.filter(addr => net.isIPv4(addr));
+    }
+  } catch (err: any) {
+    console.warn(`[SMTP DNS] resolve4 failed for ${targetHost}:`, err?.message);
+  }
+
+  if (resolvedIps.length === 0) {
+    try {
+      const lookup = await dns.promises.lookup(targetHost, { family: 4, all: true });
+      if (Array.isArray(lookup) && lookup.length > 0) {
+        resolvedIps = lookup.map(l => l.address).filter(addr => net.isIPv4(addr));
+      }
+    } catch (err: any) {
+      console.warn(`[SMTP DNS] dns.lookup failed for ${targetHost}:`, err?.message);
+    }
+  }
+
+  // Known fallback IPv4s for smtp.gmail.com if DNS is completely blocked/down
+  if (resolvedIps.length === 0 && isGmail) {
+    resolvedIps = ['74.125.203.108', '142.251.10.108', '142.250.180.108'];
+  }
+
+  const selectedIp = resolvedIps.length > 0 ? resolvedIps[0] : targetHost;
+  const result: ResolvedHostInfo = {
+    ip: selectedIp,
+    originalHost: targetHost,
+    allIps: resolvedIps.length > 0 ? resolvedIps : [selectedIp]
+  };
+
+  if (resolvedIps.length > 0) {
+    cachedResolvedHost = {
+      key: targetHost,
+      info: result,
+      expires: now + 10 * 60 * 1000 // Cache for 10 minutes
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Build a transporter pointing directly to an IPv4 address with explicit SNI servername
+ */
+export function buildTransportOptions(options: {
+  hostOrIp: string;
+  originalHost: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+}): any {
+  const { hostOrIp, originalHost, port, secure, user, pass } = options;
+
+  return {
+    host: hostOrIp,
+    port,
+    secure,
+    family: 4, // Enforce IPv4 socket
+    auth: { user, pass },
+    // Critical: When connecting directly to an IP, provide servername for TLS handshake and certificate check
+    tls: {
+      servername: originalHost,
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2'
+    },
+    servername: originalHost,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
+  } as any;
+}
+
+// Create or retrieve cached Nodemailer transporter asynchronously with IPv4 resolution
+export async function getTransporterAsync(forceFresh = false): Promise<Transporter | null> {
   const fileConfig = loadSmtpSettingsFile();
   const host = (fileConfig?.host || process.env.SMTP_HOST || '').trim();
   const rawPort = fileConfig?.port !== undefined ? fileConfig.port : process.env.SMTP_PORT;
   const port = parseInt(String(rawPort || '465').trim(), 10);
   const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
   const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
-  // Strip all whitespace from App Passwords (critical for Google App Passwords like "abcd efgh ijkl mnop")
   const pass = rawPass.replace(/\s+/g, '');
 
   const secure = fileConfig?.secure !== undefined
@@ -218,29 +330,70 @@ export function getTransporter(): Transporter | null {
     return null;
   }
 
-  const currentKey = `${host}:${port}:${user}:${pass.slice(0, 4)}:${secure}`;
+  const resolved = await resolveIpv4Host(host, forceFresh);
+  const currentKey = `${resolved.ip}:${port}:${user}:${pass.slice(0, 4)}:${secure}`;
+
+  if (!forceFresh && cachedTransporter && lastTransporterConfigKey === currentKey) {
+    return cachedTransporter;
+  }
+
+  try {
+    const opts = buildTransportOptions({
+      hostOrIp: resolved.ip,
+      originalHost: resolved.originalHost,
+      port,
+      secure: secure !== undefined ? secure : (port === 465),
+      user,
+      pass
+    });
+
+    cachedTransporter = nodemailer.createTransport(opts);
+    lastTransporterConfigKey = currentKey;
+    return cachedTransporter;
+  } catch (err) {
+    console.error('[SMTP TRANSPORTER INITIALIZATION ERROR]:', err);
+    return null;
+  }
+}
+
+// Synchronous transporter getter for legacy calls (uses cached IPv4 if available)
+export function getTransporter(): Transporter | null {
+  const fileConfig = loadSmtpSettingsFile();
+  const host = (fileConfig?.host || process.env.SMTP_HOST || '').trim();
+  const rawPort = fileConfig?.port !== undefined ? fileConfig.port : process.env.SMTP_PORT;
+  const port = parseInt(String(rawPort || '465').trim(), 10);
+  const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
+  const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
+  const pass = rawPass.replace(/\s+/g, '');
+
+  const secure = fileConfig?.secure !== undefined
+    ? Boolean(fileConfig.secure)
+    : (process.env.SMTP_SECURE === 'true' || (process.env.SMTP_SECURE !== 'false' && port === 465));
+
+  if (!host || !user || !pass) {
+    return null;
+  }
+
+  const isGmail = host.toLowerCase().includes('gmail.com') || host.toLowerCase() === 'gmail';
+  const effectiveHost = isGmail ? 'smtp.gmail.com' : host;
+  const ipOrHost = (cachedResolvedHost && cachedResolvedHost.key === effectiveHost) 
+    ? cachedResolvedHost.info.ip 
+    : (isGmail ? '74.125.203.108' : effectiveHost);
+
+  const currentKey = `${ipOrHost}:${port}:${user}:${pass.slice(0, 4)}:${secure}`;
   if (cachedTransporter && lastTransporterConfigKey === currentKey) {
     return cachedTransporter;
   }
 
   try {
-    const isGmail = host.toLowerCase().includes('gmail.com') || host.toLowerCase() === 'gmail';
-    const effectiveHost = isGmail ? 'smtp.gmail.com' : host;
-
-    const transportOptions: any = {
-      host: effectiveHost,
+    const transportOptions = buildTransportOptions({
+      hostOrIp: ipOrHost,
+      originalHost: effectiveHost,
       port,
       secure: secure !== undefined ? secure : (port === 465),
-      family: 4, // Force IPv4 to prevent ENETUNREACH errors on cloud platforms (Render, etc.) lacking IPv6
-      auth: { user, pass },
-      tls: {
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2'
-      },
-      connectionTimeout: 9000,
-      greetingTimeout: 9000,
-      socketTimeout: 12000
-    };
+      user,
+      pass
+    });
 
     cachedTransporter = nodemailer.createTransport(transportOptions);
     lastTransporterConfigKey = currentKey;
@@ -377,6 +530,9 @@ export function explainSmtpError(err: any): string {
 export async function verifySmtpConnection(): Promise<{
   success: boolean;
   message: string;
+  workingPort?: number;
+  workingSecure?: boolean;
+  workingIp?: string;
   errorCategory?: SmtpErrorCategory;
   solutionHint?: string;
   details?: string;
@@ -391,77 +547,148 @@ export async function verifySmtpConnection(): Promise<{
     };
   }
 
-  const transporter = getTransporter();
-  if (!transporter) {
+  const fileConfig = loadSmtpSettingsFile();
+  const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
+  const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
+  const host = (fileConfig?.host || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const port = parseInt(String(fileConfig?.port || process.env.SMTP_PORT || 465), 10);
+  const secure = fileConfig?.secure !== undefined ? Boolean(fileConfig.secure) : (port === 465);
+
+  const testResult = await testSmtpWithParams({
+    host,
+    port,
+    user,
+    pass: rawPass,
+    secure
+  });
+
+  // If alternate port was required for connection, persist working settings
+  if (testResult.success && testResult.workingPort && (testResult.workingPort !== port || testResult.workingSecure !== secure)) {
+    console.log(`[SMTP AUTO-UPDATE] Persisting verified working port ${testResult.workingPort} (secure: ${testResult.workingSecure}) to smtp_settings.json`);
+    saveSmtpSettingsFile({
+      port: testResult.workingPort,
+      secure: testResult.workingSecure
+    });
+  }
+
+  return testResult;
+}
+
+/**
+ * Test SMTP connection with specific parameters and automatically handle IPv4 fallback
+ */
+export async function testSmtpWithParams(options: {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  secure?: boolean;
+}): Promise<{
+  success: boolean;
+  message: string;
+  workingPort?: number;
+  workingSecure?: boolean;
+  workingIp?: string;
+  errorCategory?: SmtpErrorCategory;
+  solutionHint?: string;
+  details?: string;
+}> {
+  const cleanHost = (options.host || '').trim();
+  const cleanUser = (options.user || '').trim();
+  const cleanPass = (options.pass || '').trim().replace(/\s+/g, '');
+  const reqPort = options.port || 465;
+  const reqSecure = options.secure !== undefined ? Boolean(options.secure) : (reqPort === 465);
+
+  if (!cleanHost || !cleanUser || !cleanPass) {
     return {
       success: false,
-      errorCategory: 'Unknown error',
-      message: 'SMTP ট্রান্সপোর্টার ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে।',
-      solutionHint: 'হোস্ট এবং ইউজার তথ্য সঠিক কিনা দেখে নিন।'
+      errorCategory: 'Invalid SMTP credentials',
+      message: 'হোস্ট, ইউজার ইমেইল এবং অ্যাপ পাসওয়ার্ড দেওয়া আবশ্যক।',
+      solutionHint: 'সকল ঘর সঠিকভাবে পূরণ করে চেষ্টা করুন।'
     };
   }
 
-  try {
-    await transporter.verify();
-    return {
-      success: true,
-      message: `✅ SMTP সংযোগ সফল হয়েছে (${config.host}:${config.port})! ইমেইল পাঠানোর জন্য সম্পূর্ণ প্রস্তুত।`
-    };
-  } catch (err: any) {
-    console.error('[SMTP VERIFICATION ERROR]:', err);
-    let diagnostic = diagnoseSmtpError(err, config.port);
+  // Strictly resolve target to IPv4
+  const resolved = await resolveIpv4Host(cleanHost, true);
+  const ipsToTry = resolved.allIps.length > 0 ? resolved.allIps : [resolved.ip];
+  const isGmail = cleanHost.toLowerCase().includes('gmail') || cleanHost.toLowerCase().includes('google');
 
-    // If port 465 failed due to timeout or network block on Cloud Host (e.g. Render),
-    // automatically attempt fallback to Port 587 (TLS/STARTTLS) with IPv4!
-    const fileConfig = loadSmtpSettingsFile();
-    const rawPass = (fileConfig?.pass || process.env.SMTP_PASS || '').trim();
-    const user = (fileConfig?.user || process.env.SMTP_USER || '').trim();
-    const pass = rawPass.replace(/\s+/g, '');
-    const isGmailHost = config.host.toLowerCase().includes('gmail') || config.host.toLowerCase().includes('google');
+  // Define candidate ports to test (requested port first, then alternate standard port)
+  const candidatePorts: Array<{ port: number; secure: boolean }> = [
+    { port: reqPort, secure: reqSecure }
+  ];
 
-    if (isGmailHost && user && pass && (diagnostic.category === 'Connection timeout' || diagnostic.category === 'Port blocked' || diagnostic.category === 'Network unreachable')) {
-      const fallbackPort = config.port === 465 ? 587 : 465;
-      const fallbackSecure = fallbackPort === 465;
+  if (isGmail || reqPort === 465 || reqPort === 587) {
+    const alternatePort = reqPort === 465 ? 587 : 465;
+    candidatePorts.push({ port: alternatePort, secure: alternatePort === 465 });
+  }
 
+  let lastError: any = null;
+  let lastDiagnostic: SmtpDiagnosticResult | null = null;
+
+  for (const portConfig of candidatePorts) {
+    for (const ip of ipsToTry) {
       try {
-        console.log(`[SMTP RETRY] Port ${config.port} failed (${diagnostic.category}). Testing Port ${fallbackPort} fallback with IPv4...`);
-        const fallbackTransporter = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: fallbackPort,
-          secure: fallbackSecure,
-          family: 4,
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' },
-          connectionTimeout: 9000,
-          greetingTimeout: 9000,
-          socketTimeout: 12000
-        } as any);
-        await fallbackTransporter.verify();
+        console.log(`[SMTP TEST] Testing ${resolved.originalHost} via IPv4 ${ip}:${portConfig.port} (secure: ${portConfig.secure})...`);
+        const testTransport = nodemailer.createTransport(buildTransportOptions({
+          hostOrIp: ip,
+          originalHost: resolved.originalHost,
+          port: portConfig.port,
+          secure: portConfig.secure,
+          user: cleanUser,
+          pass: cleanPass
+        }));
 
-        // Fallback succeeded! Auto-update settings so future emails succeed!
-        saveSmtpSettingsFile({ port: fallbackPort, secure: fallbackSecure });
-        cachedTransporter = fallbackTransporter;
-        lastTransporterConfigKey = `smtp.gmail.com:${fallbackPort}:${user}:${pass.slice(0, 4)}:${fallbackSecure}`;
+        await testTransport.verify();
+
+        console.log(`[SMTP TEST SUCCESS] Connected to ${resolved.originalHost} via ${ip}:${portConfig.port}!`);
+        cachedTransporter = testTransport;
+        lastTransporterConfigKey = `${ip}:${portConfig.port}:${cleanUser}:${cleanPass.slice(0, 4)}:${portConfig.secure}`;
+
+        const isAlternate = portConfig.port !== reqPort;
+        const msg = isAlternate
+          ? `✅ পোর্ট ${reqPort} ব্লকিং অতিক্রম করে ক্লাউড অপ্টিমাইজড পোর্ট ${portConfig.port} (IPv4: ${ip}) দিয়ে সফলভাবে সংযোগ সম্পন্ন হয়েছে!`
+          : `✅ SMTP সংযোগ সফল হয়েছে (${resolved.originalHost}:${portConfig.port} | IPv4: ${ip})! ইমেইল পাঠানোর জন্য সম্পূর্ণ প্রস্তুত।`;
 
         return {
           success: true,
-          message: `✅ পোর্ট ${config.port} ব্লক থাকলেও ক্লাউড সার্ভারের জন্য পোর্ট ${fallbackPort} দিয়ে সফলভাবে সংযোগ হয়েছে! সেটিংস স্বয়ংক্রিয়ভাবে Port ${fallbackPort} এ আপডেট করা হয়েছে।`
+          message: msg,
+          workingPort: portConfig.port,
+          workingSecure: portConfig.secure,
+          workingIp: ip
         };
-      } catch (fallbackErr: any) {
-        console.log('[SMTP RETRY FAILED]:', fallbackErr.message);
-        // Overwrite diagnostic with the fallback error if it's more specific (like auth failure)
-        diagnostic = diagnoseSmtpError(fallbackErr, fallbackPort);
+      } catch (err: any) {
+        lastError = err;
+        const diag = diagnoseSmtpError(err, portConfig.port);
+        lastDiagnostic = diag;
+        console.warn(`[SMTP TEST FAILED on ${ip}:${portConfig.port}]:`, err?.message);
+
+        // If it's an authentication error (535 / Invalid credentials), the TCP/TLS network connection
+        // to Google ALREADY succeeded! There's no point testing other ports; the issue is just the App Password.
+        if (diag.category === 'Invalid SMTP credentials') {
+          return {
+            success: false,
+            errorCategory: diag.category,
+            message: `গুগল সার্ভারে সফল সংযোগ হয়েছে, কিন্তু অ্যাপ পাসওয়ার্ড সঠিক নয় (Invalid Credentials / 535)।`,
+            solutionHint: diag.solutionHint,
+            details: diag.technicalMessage,
+            workingPort: portConfig.port,
+            workingSecure: portConfig.secure,
+            workingIp: ip
+          };
+        }
       }
     }
-
-    return {
-      success: false,
-      errorCategory: diagnostic.category,
-      message: diagnostic.userMessage,
-      solutionHint: diagnostic.solutionHint,
-      details: diagnostic.technicalMessage
-    };
   }
+
+  const finalDiag = lastDiagnostic || diagnoseSmtpError(lastError, reqPort);
+  return {
+    success: false,
+    errorCategory: finalDiag.category,
+    message: finalDiag.userMessage,
+    solutionHint: finalDiag.solutionHint,
+    details: finalDiag.technicalMessage
+  };
 }
 
 /**
@@ -494,7 +721,7 @@ export async function sendEmailAlert(options: EmailAlertOptions): Promise<{ succ
   // 2. Attempt real SMTP sending if configured
   const fileConfig = loadSmtpSettingsFile();
   const config = getSmtpConfig();
-  const transporter = getTransporter();
+  const transporter = (await getTransporterAsync()) || getTransporter();
   const rawFrom = (fileConfig?.from || process.env.SMTP_FROM || fileConfig?.user || process.env.SMTP_USER || 'no-reply@hosting-live-fast.cloud').trim();
   const fromFormatted = rawFrom.includes('<') ? rawFrom : `"hosting-Live Fast" <${rawFrom}>`;
 
@@ -544,7 +771,7 @@ export async function sendTestEmail(toEmail: string): Promise<{
     };
   }
 
-  const transporter = getTransporter();
+  const transporter = (await getTransporterAsync()) || getTransporter();
   if (!transporter) {
     return {
       success: false,

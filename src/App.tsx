@@ -688,6 +688,11 @@ export default function App() {
                 setSafeUploadBot(bot);
                 setShowSafeUploadModal(true);
               }}
+              onOpenDeployments={(botId) => {
+                setSelectedBotId(botId);
+                setSettingsInitialTab('deployments');
+                setShowSettingsModal(true);
+              }}
               hasActivePlan={hasActivePlan}
               onOpenPlans={() => setActiveTab('plans')}
               lang={lang}
@@ -736,9 +741,10 @@ export default function App() {
           setCurrentUser(user);
           setShowAuthModal(false);
           setActiveTab('home');
+          fetchBots();
           setToastMessage(
             lang === 'bn'
-              ? `🎉 স্বাগতম, ${user.name}! গুগল ও অ্যাকাউন্টে সফলভাবে লগইন হয়েছেন।`
+              ? `🎉 স্বাগতম, ${user.name}! সফলভাবে আপনার অ্যাকাউন্টে লগইন হয়েছেন।`
               : `🎉 Welcome, ${user.name}! Successfully signed in.`
           );
         }}

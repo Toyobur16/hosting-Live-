@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import dns from 'dns';
 import { spawn, exec, execSync } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -16,8 +17,16 @@ import {
   sendTestEmail,
   checkAndSendExpiringPlanAlerts,
   loadSmtpSettingsFile,
-  saveSmtpSettingsFile
+  saveSmtpSettingsFile,
+  testSmtpWithParams
 } from './server/emailAlerts';
+
+// Enforce IPv4 priority globally to eliminate ENETUNREACH in containers lacking IPv6 routes
+if (typeof (dns as any).setDefaultResultOrder === 'function') {
+  try {
+    (dns as any).setDefaultResultOrder('ipv4first');
+  } catch (e) {}
+}
 
 const app = express();
 const PORT = 3000;
@@ -417,6 +426,113 @@ function saveRegistry(data: any[]) {
   fs.writeFileSync(REGISTRY_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// Bot Deployment History Helpers
+function getBotDeploymentsFile(botId: string): string {
+  const reg = getRegistry();
+  const bot = reg.find((b: any) => b.id === botId);
+  const botDir = path.join(HOSTED_BOTS_DIR, bot?.dirName || botId);
+  return path.join(botDir, 'deployments.json');
+}
+
+function getBotDeployments(botId: string): any[] {
+  const filePath = getBotDeploymentsFile(botId);
+  const reg = getRegistry();
+  const bot = reg.find((b: any) => b.id === botId);
+
+  if (fs.existsSync(filePath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch {}
+  }
+
+  // Generate fallback initial deployment if bot exists
+  if (bot) {
+    const initialDep = {
+      id: `dep-${Date.parse(bot.created || bot.createdAt || new Date().toISOString()) || Date.now()}-init`,
+      botId: bot.id,
+      version: 'v1.0.0',
+      timestamp: bot.created || bot.createdAt || new Date().toISOString(),
+      trigger: 'initial_deploy',
+      status: 'active',
+      entryFile: bot.entryFile || 'bot.py',
+      description: 'Initial cloud bot deployment and workspace bootstrap',
+      deployedBy: bot.ownerName || 'Admin',
+      filesCount: typeof bot.fileCount === 'number' ? bot.fileCount : 1
+    };
+    saveBotDeployments(botId, [initialDep]);
+    return [initialDep];
+  }
+
+  return [];
+}
+
+function saveBotDeployments(botId: string, deployments: any[]) {
+  try {
+    const filePath = getBotDeploymentsFile(botId);
+    const botDir = path.dirname(filePath);
+    if (!fs.existsSync(botDir)) {
+      fs.mkdirSync(botDir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(deployments, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save bot deployments:', err);
+  }
+}
+
+function recordBotDeployment(botId: string, details: {
+  version?: string;
+  trigger: string;
+  description?: string;
+  status?: 'active' | 'success' | 'failed';
+  entryFile?: string;
+  deployedBy?: string;
+  filesCount?: number;
+}) {
+  const deployments = getBotDeployments(botId);
+
+  let version = details.version;
+  if (!version) {
+    const lastVersion = deployments[0]?.version || 'v1.0.0';
+    const match = lastVersion.match(/v?(\d+)\.(\d+)(?:\.(\d+))?/);
+    if (match) {
+      const major = parseInt(match[1] || '1', 10);
+      const minor = parseInt(match[2] || '0', 10);
+      const patch = parseInt(match[3] || '0', 10);
+      version = `v${major}.${minor}.${patch + 1}`;
+    } else {
+      version = `v1.0.${deployments.length + 1}`;
+    }
+  }
+
+  const isNewActive = (details.status || 'active') === 'active';
+  const updatedDeployments = deployments.map((d: any) => {
+    if (isNewActive && d.status === 'active') {
+      return { ...d, status: 'success' };
+    }
+    return d;
+  });
+
+  const newEntry = {
+    id: `dep-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    botId,
+    version,
+    timestamp: new Date().toISOString(),
+    trigger: details.trigger || 'manual_deploy',
+    status: details.status || 'active',
+    entryFile: details.entryFile || 'bot.py',
+    description: details.description || `Deployment ${version}`,
+    deployedBy: details.deployedBy || 'Owner',
+    filesCount: details.filesCount
+  };
+
+  updatedDeployments.unshift(newEntry);
+  saveBotDeployments(botId, updatedDeployments);
+  return newEntry;
+}
+
 function getAccounts(): any[] {
   try {
     return JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf-8'));
@@ -656,16 +772,16 @@ function enrichUserWithPlanAndRole(user: any): any {
     user.maxBots = 999;
     user.plan = user.plan || 'admin_unlimited';
   } else {
-    // Normal user: require purchased active plan
-    if (!user.plan || user.plan === 'free') {
-      user.plan = 'none';
-      user.maxBots = 0;
+    // Normal user: ensure at least free plan with 1 bot
+    if (!user.plan || user.plan === 'none' || user.plan === 'free') {
+      user.plan = 'free';
+      user.maxBots = Math.max(user.maxBots || 0, 1);
       changed = true;
     }
 
     if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
       user.plan = 'expired';
-      user.maxBots = 0;
+      user.maxBots = 1; // Grace fallback to 1 free bot
       changed = true;
     }
   }
@@ -1048,56 +1164,120 @@ app.post('/api/auth/register', (req, res) => {
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and email are required' });
   }
+  const cleanEmail = email.trim().toLowerCase();
   const accounts = getAccounts();
-  const existing = accounts.find((a) => a.email.toLowerCase() === email.toLowerCase());
+  const existing = accounts.find((a) => a.email && a.email.trim().toLowerCase() === cleanEmail);
   if (existing) {
-    return res.status(400).json({ error: 'Account with this email already exists' });
+    return res.status(400).json({ error: 'এই ইমেইলে ইতোমধ্যে অ্যাকাউন্ট খোলা আছে। অনুগ্রহ করে লগইন করুন।' });
   }
 
   const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const isAdmin = accounts.length === 0 ||
+    cleanEmail === 'mdtayburrahman1111@gmail.com' ||
+    cleanEmail === 'toyobur@telegram.bot';
+
   const newUser = {
     id: userId,
     name: name.trim(),
-    email: email.trim().toLowerCase(),
-    role: accounts.length === 0 ? 'admin' : 'user'
+    email: cleanEmail,
+    password: password || '',
+    role: isAdmin ? 'admin' : 'user',
+    plan: 'free',
+    maxBots: isAdmin ? 999 : 1,
+    planExpiresAt: null,
+    balanceBdt: 0,
+    balanceUsd: 0,
+    isVerified: true,
+    avatar: '',
+    googleId: '',
+    createdAt: new Date().toISOString()
   };
   accounts.push(newUser);
   saveAccounts(accounts);
 
-  const token = generateAuthToken(newUser);
+  const enriched = enrichUserWithPlanAndRole(newUser);
+  const token = generateAuthToken(enriched);
   const sessions = getSessions();
   sessions[token] = userId;
   saveSessions(sessions);
 
-  res.json({ success: true, token, user: newUser });
+  res.json({ success: true, token, user: enriched });
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email } = req.body;
+  const { email, password } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
+  const cleanEmail = email.trim().toLowerCase();
   const accounts = getAccounts();
-  let user = accounts.find((a) => a.email.toLowerCase() === email.toLowerCase());
+  let user = accounts.find((a) => a.email && a.email.trim().toLowerCase() === cleanEmail);
   if (!user) {
     // Quick auto-registration if doesn't exist
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const isAdmin = accounts.length === 0 ||
+      cleanEmail === 'mdtayburrahman1111@gmail.com' ||
+      cleanEmail === 'toyobur@telegram.bot';
     user = {
       id: userId,
-      name: email.split('@')[0],
-      email: email.trim().toLowerCase(),
-      role: accounts.length === 0 ? 'admin' : 'user'
+      name: cleanEmail.split('@')[0],
+      email: cleanEmail,
+      password: password || '',
+      role: isAdmin ? 'admin' : 'user',
+      plan: 'free',
+      maxBots: isAdmin ? 999 : 1,
+      planExpiresAt: null,
+      balanceBdt: 0,
+      balanceUsd: 0,
+      isVerified: true,
+      avatar: '',
+      googleId: '',
+      createdAt: new Date().toISOString()
     };
     accounts.push(user);
     saveAccounts(accounts);
+  } else {
+    // Check password if set
+    if (user.password && password && user.password !== password) {
+      return res.status(401).json({ error: 'ভুল পাসওয়ার্ড! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন অথবা পাসওয়ার্ড রিসেট করুন।' });
+    }
+    // If account had no password previously, save it now
+    if (!user.password && password) {
+      user.password = password;
+      saveAccounts(accounts);
+    }
   }
 
+  user = enrichUserWithPlanAndRole(user);
   const token = generateAuthToken(user);
   const sessions = getSessions();
   sessions[token] = user.id;
   saveSessions(sessions);
 
   res.json({ success: true, token, user });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: 'ইমেইল এবং নতুন পাসওয়ার্ড প্রদান করুন' });
+  }
+  const cleanEmail = email.trim().toLowerCase();
+  const accounts = getAccounts();
+  const user = accounts.find((a) => a.email && a.email.trim().toLowerCase() === cleanEmail);
+  if (!user) {
+    return res.status(404).json({ error: 'এই ইমেইলে কোনো নিবন্ধিত অ্যাকাউন্ট পাওয়া যায়নি' });
+  }
+  user.password = newPassword;
+  saveAccounts(accounts);
+
+  const enriched = enrichUserWithPlanAndRole(user);
+  const token = generateAuthToken(enriched);
+  const sessions = getSessions();
+  sessions[token] = user.id;
+  saveSessions(sessions);
+
+  res.json({ success: true, message: 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে', token, user: enriched });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -1119,7 +1299,7 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Google Direct Login route
+// Google Direct Login route (Seamlessly links with any previously registered account matching email)
 app.post('/api/auth/google', (req, res) => {
   try {
     const { credential, email: directEmail, name: directName, picture: directPicture, googleId: directGoogleId } = req.body;
@@ -1132,10 +1312,12 @@ app.post('/api/auth/google', (req, res) => {
       try {
         const parts = credential.split('.');
         if (parts.length >= 2) {
-          const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payloadJson = Buffer.from(base64, 'base64').toString('utf-8');
           const payload = JSON.parse(payloadJson);
           email = payload.email || '';
-          name = payload.name || payload.given_name || email.split('@')[0];
+          name = payload.name || payload.given_name || (payload.email ? payload.email.split('@')[0] : '');
           picture = payload.picture || '';
           googleId = payload.sub || '';
         }
@@ -1145,28 +1327,35 @@ app.post('/api/auth/google', (req, res) => {
     }
 
     if (!email && directEmail) {
-      email = directEmail;
-      name = directName || directEmail.split('@')[0];
+      email = String(directEmail).trim();
+      name = directName || email.split('@')[0];
       picture = directPicture || '';
       googleId = directGoogleId || '';
     }
 
     if (!email) {
-      return res.status(400).json({ error: 'Google sign-in did not provide a valid email address' });
+      return res.status(400).json({ error: 'গুগল সাইন-ইন থেকে কোনো সঠিক ইমেইল এড্রেস পাওয়া যায়নি' });
     }
 
     email = email.trim().toLowerCase();
     name = (name || email.split('@')[0]).trim();
 
     const accounts = getAccounts();
-    let user = accounts.find((a) => a.email && a.email.toLowerCase() === email);
+    // Look up existing account by email OR googleId
+    let user = accounts.find((a) =>
+      (a.email && a.email.trim().toLowerCase() === email) ||
+      (googleId && a.googleId && a.googleId === googleId)
+    );
 
     const isAdmin = accounts.length === 0 ||
       email === 'mdtayburrahman1111@gmail.com' ||
       email === 'toyobur@telegram.bot' ||
       (user && user.role === 'admin');
 
+    let isExistingAccount = false;
+
     if (!user) {
+      // Create new account if none exists with this email
       const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       user = {
         id: userId,
@@ -1178,33 +1367,82 @@ app.post('/api/auth/google', (req, res) => {
         plan: 'free',
         maxBots: isAdmin ? 999 : 1,
         planExpiresAt: null,
+        balanceBdt: 0,
+        balanceUsd: 0,
         isVerified: true,
         createdAt: new Date().toISOString()
       };
       accounts.push(user);
       saveAccounts(accounts);
     } else {
+      // PREVIOUS ACCOUNT EXISTS: Link Google login seamlessly to this exact registered account
+      isExistingAccount = true;
       let changed = false;
+
+      // Link googleId to their existing account
+      if (googleId && user.googleId !== googleId) {
+        user.googleId = googleId;
+        changed = true;
+      }
+
+      // Link avatar if not set
       if (picture && !user.avatar) {
         user.avatar = picture;
         changed = true;
       }
+
+      // Update name if current name is empty or default handle
+      if ((!user.name || user.name === email.split('@')[0]) && name) {
+        user.name = name;
+        changed = true;
+      }
+
+      // Admin role preservation
       if (isAdmin && user.role !== 'admin') {
         user.role = 'admin';
         user.maxBots = 999;
         changed = true;
       }
+
+      // Mark verified
       if (!user.isVerified) {
         user.isVerified = true;
         changed = true;
       }
-      if (!user.plan) {
+
+      // Ensure plan exists
+      if (!user.plan || user.plan === 'none') {
         user.plan = 'free';
         user.maxBots = user.role === 'admin' ? 999 : 1;
         changed = true;
       }
+
       if (changed) {
+        const uIdx = accounts.findIndex((a) => a.id === user.id);
+        if (uIdx !== -1) {
+          accounts[uIdx] = { ...accounts[uIdx], ...user };
+        }
         saveAccounts(accounts);
+      }
+
+      // Ensure all bots created under this email are connected to this user ID
+      try {
+        const reg = getRegistry();
+        let regChanged = false;
+        for (const bot of reg) {
+          if (bot.ownerEmail && bot.ownerEmail.trim().toLowerCase() === email) {
+            if (bot.ownerId !== user.id || bot.owner !== user.id) {
+              bot.ownerId = user.id;
+              bot.owner = user.id;
+              regChanged = true;
+            }
+          }
+        }
+        if (regChanged) {
+          saveRegistry(reg);
+        }
+      } catch (err) {
+        console.error('Error reconciling bot ownership on Google login:', err);
       }
     }
 
@@ -1214,7 +1452,15 @@ app.post('/api/auth/google', (req, res) => {
     sessions[token] = user.id;
     saveSessions(sessions);
 
-    return res.json({ success: true, token, user });
+    return res.json({
+      success: true,
+      token,
+      user,
+      isExistingAccount,
+      message: isExistingAccount
+        ? 'আপনার পূর্বের রেজিস্ট্রেশন করা অ্যাকাউন্টে সফলভাবে গুগল দিয়ে লগইন হয়েছে।'
+        : 'গুগল দিয়ে সফলভাবে নতুন অ্যাকাউন্ট তৈরি ও লগইন হয়েছে।'
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Google login failed' });
   }
@@ -1750,6 +1996,59 @@ app.post('/api/admin/smtp-settings', async (req, res) => {
     verifyMessage: verifyResult.message,
     solutionHint: verifyResult.solutionHint,
     details: verifyResult.details,
+    workingPort: verifyResult.workingPort,
+    workingSecure: verifyResult.workingSecure,
+    config: getSmtpConfig()
+  });
+});
+
+// Auto-Fix IPv4 & Auto-detect working SMTP port (Port 587 or 465)
+app.post('/api/admin/smtp-autofix', async (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const existing = loadSmtpSettingsFile();
+  const rawUser = (req.body.user || existing?.user || process.env.SMTP_USER || '').trim();
+  const reqPass = req.body.pass;
+  const rawPass = (reqPass && reqPass !== '********') ? reqPass : (existing?.pass || process.env.SMTP_PASS || '');
+  const rawHost = (req.body.host || existing?.host || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const requestedPort = parseInt(String(req.body.port || existing?.port || 465), 10);
+  const requestedSecure = req.body.secure !== undefined ? Boolean(req.body.secure) : (requestedPort === 465);
+
+  if (!rawUser) {
+    return res.status(400).json({ error: 'প্রেরক ইমেইল এড্রেস দেওয়া আবশ্যক।' });
+  }
+
+  const testResult = await testSmtpWithParams({
+    host: rawHost,
+    port: requestedPort,
+    user: rawUser,
+    pass: rawPass,
+    secure: requestedSecure
+  });
+
+  if (testResult.success && testResult.workingPort) {
+    saveSmtpSettingsFile({
+      host: rawHost,
+      port: testResult.workingPort,
+      user: rawUser,
+      pass: rawPass.replace(/\s+/g, ''),
+      secure: testResult.workingSecure !== undefined ? testResult.workingSecure : (testResult.workingPort === 465)
+    });
+  }
+
+  res.json({
+    success: testResult.success,
+    connected: testResult.success,
+    message: testResult.message,
+    workingPort: testResult.workingPort,
+    workingSecure: testResult.workingSecure,
+    workingIp: testResult.workingIp,
+    errorCategory: testResult.errorCategory,
+    solutionHint: testResult.solutionHint,
+    details: testResult.details,
     config: getSmtpConfig()
   });
 });
@@ -2652,8 +2951,13 @@ app.get('/api/bots', (req, res) => {
     if (isRunning && runningProcesses.get(b.id)?.startTime) {
       uptimeSeconds = Math.floor((Date.now() - runningProcesses.get(b.id)!.startTime) / 1000);
     }
+    const deps = getBotDeployments(b.id);
+    const latestDep = deps[0];
     return {
       ...b,
+      currentVersion: latestDep?.version || 'v1.0.0',
+      lastDeployedAt: latestDep?.timestamp || b.createdAt || b.created || new Date().toISOString(),
+      deploymentCount: deps.length,
       createdAt: b.createdAt || b.created || new Date().toISOString(),
       ownerName: b.ownerName || b.owner || 'User',
       status: isRunning ? 'running' : b.status || 'stopped',
@@ -2822,6 +3126,14 @@ app.post('/api/bots', (req, res) => {
   const updatedReg = getRegistry();
   updatedReg.push(newBot);
   saveRegistry(updatedReg);
+
+  recordBotDeployment(botId, {
+    version: 'v1.0.0',
+    trigger: 'initial_deploy',
+    description: 'Initial bot project deployment and setup',
+    deployedBy: user ? user.name : 'Owner',
+    entryFile: resolvedEntry
+  });
 
   // Background install requirements if present, without blocking API response
   const reqPath = path.join(botDir, 'requirements.txt');
@@ -3130,6 +3442,13 @@ app.post('/api/bots/:id/file', (req, res) => {
     fs.writeFileSync(filePath, content, 'utf-8');
     appendLog(id, 'info', `File '${safeFilename}' updated successfully.`);
 
+    recordBotDeployment(id, {
+      trigger: 'code_update',
+      description: `Updated script file: ${safeFilename}`,
+      deployedBy: user ? user.name : 'Owner',
+      entryFile: safeFilename
+    });
+
     if (restart) {
       stopBotProcess(id);
       setTimeout(() => {
@@ -3428,6 +3747,13 @@ app.post('/api/bots/:id/safe-update', (req, res) => {
 
   appendLog(id, 'info', `Safe update completed! Updated ${updatedFileCount} files. Preserved ${preservedDatabases.length} database files (${usersCount} users, total balance: ${totalBalance} सुरक्षित).`);
 
+  recordBotDeployment(id, {
+    trigger: zipBase64 ? 'zip_upload' : 'safe_update',
+    description: `Safe update: updated ${updatedFileCount} files (preserved ${preservedDatabases.length} database collections)`,
+    deployedBy: user ? user.name : 'Owner',
+    filesCount: updatedFileCount
+  });
+
   if (restart) {
     stopBotProcess(id);
     setTimeout(() => {
@@ -3579,6 +3905,116 @@ app.get('/api/bots/:id/database/stats', (req, res) => {
     withdrawCount,
     snapshotsCount,
     isHealthy: true
+  });
+});
+
+// Bot Deployment History Routes
+app.get('/api/bots/:id/deployments', (req, res) => {
+  const { id } = req.params;
+  const reg = getRegistry();
+  const bot = reg.find((b: any) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (user && !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ডিপ্লয়মেন্ট হিস্ট্রি দেখার অনুমতি আপনার নেই (Access Denied: Only bot owner can view deployments)' });
+  }
+
+  const deployments = getBotDeployments(id);
+  res.json({
+    success: true,
+    botId: id,
+    botName: bot.name,
+    currentVersion: deployments[0]?.version || 'v1.0.0',
+    deployments
+  });
+});
+
+app.post('/api/bots/:id/deployments', (req, res) => {
+  const { id } = req.params;
+  const { version, description, trigger = 'manual_deploy', restart = true } = req.body;
+  const reg = getRegistry();
+  const bot = reg.find((b: any) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (user && !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ডিপ্লয় করার অনুমতি আপনার নেই (Access Denied: Only bot owner can trigger deployments)' });
+  }
+
+  const botDir = path.join(HOSTED_BOTS_DIR, bot.dirName || bot.id);
+  let filesCount = 1;
+  try {
+    if (fs.existsSync(botDir)) {
+      filesCount = fs.readdirSync(botDir).filter((f: string) => !f.startsWith('.')).length;
+    }
+  } catch {}
+
+  const newDep = recordBotDeployment(id, {
+    version: version ? version.trim() : undefined,
+    trigger,
+    description: description ? description.trim() : 'Manual version deployment',
+    status: 'active',
+    entryFile: bot.entryFile || 'bot.py',
+    deployedBy: user ? (user.name || user.email) : (bot.ownerName || 'Admin'),
+    filesCount
+  });
+
+  if (restart) {
+    stopBotProcess(id);
+    setTimeout(() => {
+      launchBotProcess(bot);
+    }, 600);
+  }
+
+  appendLog(id, 'info', `🚀 Deployment ${newDep.version} released: ${newDep.description}`);
+
+  const allDeployments = getBotDeployments(id);
+  res.json({
+    success: true,
+    message: `Version ${newDep.version} deployed successfully`,
+    deployment: newDep,
+    deployments: allDeployments
+  });
+});
+
+app.post('/api/bots/:id/deployments/:depId/activate', (req, res) => {
+  const { id, depId } = req.params;
+  const { restart = true } = req.body;
+  const reg = getRegistry();
+  const bot = reg.find((b: any) => b.id === id);
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+
+  const user = getAuthUser(req);
+  if (user && !canUserAccessBot(bot, user)) {
+    return res.status(403).json({ error: 'ডিপ্লয়মেন্ট রোলব্যাক করার অনুমতি আপনার নেই' });
+  }
+
+  const deployments = getBotDeployments(id);
+  const targetDep = deployments.find((d: any) => d.id === depId);
+  if (!targetDep) {
+    return res.status(404).json({ error: 'Deployment record not found' });
+  }
+
+  const updatedDeployments = deployments.map((d: any) => ({
+    ...d,
+    status: d.id === depId ? 'active' : 'success'
+  }));
+  saveBotDeployments(id, updatedDeployments);
+
+  if (restart) {
+    stopBotProcess(id);
+    setTimeout(() => {
+      launchBotProcess(bot);
+    }, 600);
+  }
+
+  appendLog(id, 'info', `🔄 Deployment version ${targetDep.version} set as active target.`);
+
+  res.json({
+    success: true,
+    message: `Version ${targetDep.version} is now marked as active`,
+    deployments: updatedDeployments
   });
 });
 

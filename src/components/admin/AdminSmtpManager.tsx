@@ -9,6 +9,7 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoFixing, setAutoFixing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [statusData, setStatusData] = useState<{
@@ -43,6 +44,8 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
     message: string;
     details?: string;
     solutionHint?: string;
+    workingPort?: number;
+    workingSecure?: boolean;
   } | null>(null);
 
   const [testResult, setTestResult] = useState<{
@@ -95,6 +98,73 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
       console.error('Error fetching SMTP settings:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAutoFix = async () => {
+    setAutoFixing(true);
+    setSaveResult(null);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/admin/smtp-autofix', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSaveResult({
+          success: true,
+          connected: true,
+          message: data.message,
+          solutionHint: data.solutionHint,
+          details: data.details,
+          workingPort: data.workingPort,
+          workingSecure: data.workingSecure
+        });
+        if (data.workingPort) {
+          setFormData((prev) => ({
+            ...prev,
+            port: data.workingPort,
+            secure: data.workingSecure !== undefined ? data.workingSecure : (data.workingPort === 465)
+          }));
+        }
+        setStatusData({
+          configured: true,
+          connected: true,
+          message: data.message,
+          config: data.config
+        });
+      } else {
+        setSaveResult({
+          success: false,
+          connected: false,
+          errorCategory: data.errorCategory || 'Error',
+          message: data.message || data.error || 'স্বয়ংক্রিয় ফিক্স ব্যর্থ হয়েছে',
+          solutionHint: data.solutionHint,
+          details: data.details,
+          workingPort: data.workingPort,
+          workingSecure: data.workingSecure
+        });
+        if (data.workingPort) {
+          setFormData((prev) => ({
+            ...prev,
+            port: data.workingPort,
+            secure: data.workingSecure !== undefined ? data.workingSecure : (data.workingPort === 465)
+          }));
+        }
+      }
+    } catch (err: any) {
+      setSaveResult({
+        success: false,
+        connected: false,
+        errorCategory: 'Network Error',
+        message: err.message || 'স্বয়ংক্রিয় ফিক্সের সময়ে নেটওয়ার্ক সমস্যা হয়েছে।'
+      });
+    } finally {
+      setAutoFixing(false);
     }
   };
 
@@ -281,19 +351,33 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
 
       {/* Diagnostics / Connection Message Banner */}
       {statusData?.message && (
-        <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+        <div className={`p-3.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
           statusData.connected
             ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
             : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
         }`}>
-          {statusData.connected ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
-          ) : (
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-          )}
-          <div className="flex-1 leading-relaxed">
-            <strong>{lang === 'bn' ? 'সার্ভার ডায়াগনস্টিক রিপোর্ট:' : 'Server Diagnostics:'}</strong> {statusData.message}
+          <div className="flex items-start gap-2.5">
+            {statusData.connected ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            )}
+            <div className="leading-relaxed">
+              <strong>{lang === 'bn' ? 'সার্ভার ডায়াগনস্টিক রিপোর্ট:' : 'Server Diagnostics:'}</strong> {statusData.message}
+            </div>
           </div>
+
+          {!statusData.connected && (
+            <button
+              type="button"
+              onClick={handleAutoFix}
+              disabled={autoFixing}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-center shadow-sm disabled:opacity-50"
+            >
+              {autoFixing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
+              <span>{autoFixing ? 'ফিক্স হচ্ছে...' : 'অটো-ফিক্স ও কানেক্ট করুন'}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -403,9 +487,19 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
                 className="w-full bg-[#080d19] border border-[#1e2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                 required
               />
-              <p className="text-[11px] text-slate-400 mt-1">
-                💡 <strong className="text-amber-300">টিপস:</strong> জিমেইল ব্যবহার করলে সাধারণ গুগল পাসওয়ার্ড কাজ করবে না। আপনার গুগল একাউন্টে ২-স্টেপ চালু করে ১৬ সংখ্যার App Password তৈরি করে এখানে দিন। স্পেস থাকলে স্বয়ংক্রিয়ভাবে মুছে যাবে।
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 text-[11px]">
+                <p className="text-slate-400">
+                  💡 <strong className="text-amber-300">টিপস:</strong> জিমেইলে সাধারণ পাসওয়ার্ড কাজ করে না। আপনার গুগল একাউন্টে ২-স্টেপ চালু করে ১৬ সংখ্যার App Password তৈরি করে দিন।
+                </p>
+                <a
+                  href="https://myaccount.google.com/apppasswords"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold underline bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-500/20"
+                >
+                  <span>Google App Password জেনারেটর খুলুন ↗</span>
+                </a>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -469,34 +563,58 @@ export const AdminSmtpManager: React.FC<AdminSmtpManagerProps> = ({ lang = 'bn' 
                   </div>
                 )}
 
-                {!saveResult.connected && formData.port === 465 && (
-                  <div className="pt-1">
+                {!saveResult.connected && (
+                  <div className="pt-1 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        applyPreset('gmail-tls');
-                        setTimeout(() => {
-                          const formEl = document.querySelector('form');
-                          if (formEl) formEl.requestSubmit();
-                        }, 50);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      onClick={handleAutoFix}
+                      disabled={autoFixing}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
                     >
-                      <span>👉 ক্লাউড সার্ভারের জন্য 'Gmail 587 (TLS)' দিয়ে চেষ্টা করুন</span>
+                      {autoFixing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
+                      <span>ক্লাউড অটো-ফিক্স ও পোর্ট টেস্ট (Auto-Fix IPv4)</span>
                     </button>
+                    {formData.port === 465 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          applyPreset('gmail-tls');
+                          setTimeout(() => {
+                            const formEl = document.querySelector('form');
+                            if (formEl) formEl.requestSubmit();
+                          }, 50);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <span>Gmail 587 (TLS) দিয়ে টেস্ট করুন</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/10 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
-            >
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-              <span>{saving ? 'সংরক্ষণ ও সংযোগ পরীক্ষা হচ্ছে...' : 'সেটিংস সেভ করুন ও সংযোগ পরীক্ষা করুন (Save & Test Connection)'}</span>
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="submit"
+                disabled={saving || autoFixing}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-500/10 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+              >
+                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                <span>{saving ? 'সংরক্ষণ ও সংযোগ পরীক্ষা হচ্ছে...' : 'সেটিংস সেভ ও সংযোগ পরীক্ষা (Save & Test)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAutoFix}
+                disabled={saving || autoFixing}
+                className="px-4 py-2.5 rounded-xl bg-[#16233b] hover:bg-[#1e3052] border border-emerald-500/30 text-emerald-400 font-bold text-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all"
+                title="সার্ভারের সাথে IPv4 এবং পোর্ট স্বয়ংক্রিয়ভাবে পরীক্ষা ও সমাধান করুন"
+              >
+                {autoFixing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>⚡</span>}
+                <span>{autoFixing ? 'ফিক্স হচ্ছে...' : 'অটো-ফিক্স (Auto-Fix)'}</span>
+              </button>
+            </div>
           </form>
         </div>
 

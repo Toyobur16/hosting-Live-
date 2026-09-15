@@ -32,10 +32,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showGoogleInput, setShowGoogleInput] = useState(false);
   const [googleEmail, setGoogleEmail] = useState('');
+  const [rememberedEmail, setRememberedEmail] = useState<string>(() => {
+    try {
+      return localStorage.getItem('bot_registered_email') || '';
+    } catch {
+      return '';
+    }
+  });
 
   const GOOGLE_CLIENT_ID =
     (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
     '617408661237-hh7c136m8svtsj6t9l4r1cjgq49shd15.apps.googleusercontent.com';
+
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const savedEmail = localStorage.getItem('bot_registered_email') || '';
+        if (savedEmail) {
+          setRememberedEmail(savedEmail);
+          setEmail((prev) => prev || savedEmail);
+          setGoogleEmail((prev) => prev || savedEmail);
+        }
+      } catch {}
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     // If Google Identity Services library is loaded, initialize for silent token acquisition
@@ -90,6 +110,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       localStorage.setItem('bot_auth_token', data.token);
       localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      localStorage.setItem('bot_registered_email', data.user.email);
+      setRememberedEmail(data.user.email);
       onSuccess(data.user, data.token);
       if (onClose) onClose();
     } catch (err: any) {
@@ -115,6 +137,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       localStorage.setItem('bot_auth_token', data.token);
       localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      localStorage.setItem('bot_registered_email', data.user.email);
+      setRememberedEmail(data.user.email);
       onSuccess(data.user, data.token);
       if (onClose) onClose();
     } catch (err: any) {
@@ -127,8 +151,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleDirectGoogleLogin = async () => {
     setError(null);
 
-    // If user already typed an email into the login field or google email field, use it immediately
-    const emailToUse = (googleEmail.trim() || email.trim()).toLowerCase();
+    // If user already typed an email into the login field, google email field, or has a remembered previous email, use it immediately
+    const emailToUse = (googleEmail.trim() || email.trim() || rememberedEmail.trim()).toLowerCase();
     if (emailToUse && emailToUse.includes('@')) {
       await handleAuthenticateWithGoogleEmail(emailToUse);
       return;
@@ -250,6 +274,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         // Auto-login immediately upon registration so user doesn't have to fill forms again
         localStorage.setItem('bot_auth_token', data.token);
         localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        localStorage.setItem('bot_registered_email', data.user.email);
+        setRememberedEmail(data.user.email);
         onSuccess(data.user, data.token);
         if (onClose) onClose();
       } else if (mode === 'login') {
@@ -264,6 +290,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
         localStorage.setItem('bot_auth_token', data.token);
         localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        localStorage.setItem('bot_registered_email', data.user.email);
+        setRememberedEmail(data.user.email);
         onSuccess(data.user, data.token);
         if (onClose) onClose();
       } else if (mode === 'reset') {
@@ -278,6 +306,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
         localStorage.setItem('bot_auth_token', data.token);
         localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        localStorage.setItem('bot_registered_email', data.user.email);
+        setRememberedEmail(data.user.email);
         onSuccess(data.user, data.token);
         if (onClose) onClose();
       }
@@ -352,6 +382,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Quick Google Login for previously registered account */}
+        {mode === 'login' && rememberedEmail && (
+          <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-blue-950/60 via-slate-900 to-indigo-950/50 border border-blue-500/40 shadow-md">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>{lang === 'bn' ? 'পূর্বে রেজিস্ট্রেশন করা অ্যাকাউন্ট:' : 'Previously Registered Account:'}</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono font-medium border border-emerald-500/30">
+                {lang === 'bn' ? 'সংযুক্ত' : 'Linked'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 bg-[#0b1220]/80 p-2.5 rounded-xl border border-slate-800">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white font-medium truncate font-mono">{rememberedEmail}</p>
+                <p className="text-[10px] text-slate-400 leading-none mt-0.5">
+                  {lang === 'bn' ? 'গুগল দিয়ে ১-ক্লিকে আগের অ্যাকাউন্টে লগইন করুন' : '1-Click Google sign-in to this account'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={googleLoading}
+                onClick={() => handleAuthenticateWithGoogleEmail(rememberedEmail)}
+                className="px-3.5 py-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 font-bold text-xs rounded-lg shadow transition-all shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {googleLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-700" />
+                ) : (
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                )}
+                <span>{lang === 'bn' ? 'গুগল দিয়ে লগইন' : 'Google Login'}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {mode === 'register' && (
@@ -581,7 +652,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span>
                   {googleLoading
                     ? (lang === 'bn' ? 'গুগল দিয়ে লগইন হচ্ছে...' : 'Signing in with Google...')
-                    : (lang === 'bn' ? 'Google দিয়ে সরাসরি লগইন করুন' : 'Sign in directly with Google')}
+                    : (mode === 'login' && (rememberedEmail || email)
+                        ? (lang === 'bn' ? `Google দিয়ে লগইন করুন (${(rememberedEmail || email).split('@')[0]})` : `Continue with Google (${(rememberedEmail || email).split('@')[0]})`)
+                        : (lang === 'bn' ? 'Google দিয়ে সরাসরি লগইন করুন' : 'Sign in directly with Google'))}
                 </span>
               </button>
             )}

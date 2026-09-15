@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { 
   X, Settings, FileCode, Package, Database, ShieldCheck, Cloud, ChevronRight, HardDrive, ArrowLeft,
-  Bell, BellOff, Volume2 
+  Bell, BellOff, Volume2, History, Rocket, Tag
 } from 'lucide-react';
 import { ScriptEditor } from './ScriptEditor';
 import { DatabaseManager } from './DatabaseManager';
 import { HostingGuide } from './HostingGuide';
 import { PipManagerModal } from './PipManagerModal';
+import { DeploymentHistoryView } from './DeploymentHistoryView';
 import { HostedBot, AuthUser } from '../types';
 import { playBotStoppedAlert } from '../utils/audioAlert';
 
@@ -47,6 +48,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const selectedBot = bots.find((b) => b.id === selectedBotId) || (bots.length > 0 ? bots[0] : null);
 
   const SETTING_ITEMS = [
+    {
+      id: 'deployments',
+      icon: History,
+      titleBn: 'ডিপ্লয়মেন্ট হিস্ট্রি ও ভার্সন',
+      titleEn: 'Deployment History & Versions',
+      descBn: 'অতীতের ডিপ্লয়মেন্ট টাইমস্ট্যাম্প, রিলিজ নোট, ভার্সন ও সোর্স ট্র্যাক করুন',
+      descEn: 'Inspect past deployment timestamps, versions, release notes and rollback targets',
+      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800'
+    },
     {
       id: 'files',
       icon: FileCode,
@@ -124,12 +134,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <h3 className="text-base font-bold text-[#1e293b] dark:text-white">
                   {activeTab === 'overview'
                     ? (lang === 'bn' ? 'কন্ট্রোল সেন্টার ও সেটিংস' : 'Control Center & Settings')
-                    : SETTING_ITEMS.find((i) => i.id === activeTab)?.titleBn || 'Settings'}
+                    : (lang === 'bn'
+                        ? SETTING_ITEMS.find((i) => i.id === activeTab)?.titleBn
+                        : SETTING_ITEMS.find((i) => i.id === activeTab)?.titleEn) || 'Settings'}
                 </h3>
                 <p className="text-xs text-[#64748b] dark:text-[#94a3b8]">
                   {activeTab === 'overview'
                     ? (lang === 'bn' ? 'বট ম্যানেজমেন্ট, ফাইল ও ডাটাবেজ নিয়ন্ত্রণ' : 'Advanced management tools, files and configuration')
-                    : SETTING_ITEMS.find((i) => i.id === activeTab)?.descBn || ''}
+                    : (lang === 'bn'
+                        ? SETTING_ITEMS.find((i) => i.id === activeTab)?.descBn
+                        : SETTING_ITEMS.find((i) => i.id === activeTab)?.descEn) || ''}
                 </p>
               </div>
             </div>
@@ -270,6 +284,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
+                {/* Selected Bot Version & Deployment Quick Banner */}
+                {selectedBot && (
+                  <div className="p-4 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-200 dark:border-purple-900/50 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                        <Rocket className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-[#1e293b] dark:text-white">
+                            {selectedBot.name}
+                          </h4>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 font-bold border border-purple-300 dark:border-purple-800">
+                            {selectedBot.currentVersion || 'v1.0.0'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#64748b] dark:text-[#94a3b8] mt-0.5">
+                          {lang === 'bn' 
+                            ? `মোট ${selectedBot.deploymentCount || 1} টি ডিপ্লয়মেন্ট রেকর্ড সংরক্ষিত আছে`
+                            : `${selectedBot.deploymentCount || 1} deployment release(s) recorded`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('deployments')}
+                      className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>{lang === 'bn' ? 'ডিপ্লয়মেন্ট হিস্ট্রি খুলুন' : 'View Deployment History'}</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {SETTING_ITEMS.map((item) => {
                     const Icon = item.icon;
@@ -304,6 +353,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   })}
                 </div>
               </div>
+            ) : activeTab === 'deployments' ? (
+              <DeploymentHistoryView
+                lang={lang}
+                botId={selectedBot?.id}
+                botName={selectedBot?.name}
+                onBotsUpdated={onBotsUpdated}
+              />
             ) : activeTab === 'files' ? (
               <ScriptEditor
                 lang={lang}

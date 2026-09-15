@@ -11,12 +11,14 @@
   },
   {
     "id": "user_1789353285319_jos3",
-    "name": "toyoburrahman560",
+    "name": "Toyobur Rahman Test",
     "email": "toyoburrahman560@gmail.com",
     "role": "user",
-    "plan": "none",
-    "maxBots": 0,
+    "plan": "free",
+    "maxBots": 1,
+    "isVerified": true,
     "balanceBdt": 0,
-    "balanceUsd": 0
+    "balanceUsd": 0,
+    "googleId": "google_sub_12345"
   }
 ]

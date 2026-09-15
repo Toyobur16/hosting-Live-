@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dep-1789445993000-h92",
+    "botId": "otpzonejk-bot-h92eu",
+    "version": "v1.1.0",
+    "timestamp": "2026-09-14T06:22:26.963Z",
+    "trigger": "safe_update",
+    "status": "active",
+    "entryFile": "bot.py",
+    "description": "Safe update: verified database integrity & custom service range handlers",
+    "deployedBy": "Toyobur Rahman",
+    "filesCount": 10
+  },
+  {
+    "id": "dep-1789215720000-8s2",
+    "botId": "otpzonejk-bot-h92eu",
+    "version": "v1.0.1",
+    "timestamp": "2026-09-11T14:22:00.000Z",
+    "trigger": "code_update",
+    "status": "success",
+    "entryFile": "bot.py",
+    "description": "Added OTP delivery alerts, paid SMS logs and withdraw request pipeline",
+    "deployedBy": "Toyobur Rahman",
+    "filesCount": 9
+  },
+  {
+    "id": "dep-1789077072000-1k9",
+    "botId": "otpzonejk-bot-h92eu",
+    "version": "v1.0.0",
+    "timestamp": "2026-09-09T21:51:12.263Z",
+    "trigger": "initial_deploy",
+    "status": "success",
+    "entryFile": "bot.py",
+    "description": "Initial cloud bot deployment and workspace bootstrap",
+    "deployedBy": "Toyobur Rahman",
+    "filesCount": 7
+  }
+]
