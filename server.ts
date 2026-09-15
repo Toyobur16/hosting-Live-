@@ -2411,11 +2411,21 @@ app.post('/api/admin/site-settings', (req, res) => {
   }
 
   const { siteName, logoUrl, taglineBn, taglineEn } = req.body;
+  let finalLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
+
+  // If user pasted a Kommodo share link like https://kommodo.ai/i/ID, convert to direct image URL
+  if (finalLogoUrl && finalLogoUrl.includes('kommodo.ai/i/')) {
+    const match = finalLogoUrl.match(/kommodo\.ai\/i\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      finalLogoUrl = `https://plain-apac-prod-public.komododecks.com/202609/15/${match[1]}/image.png`;
+    }
+  }
+
   const current = getSiteSettings();
   const updated = {
     ...current,
     ...(typeof siteName === 'string' ? { siteName: siteName.trim() } : {}),
-    ...(typeof logoUrl === 'string' ? { logoUrl: logoUrl.trim() } : {}),
+    ...(finalLogoUrl !== undefined ? { logoUrl: finalLogoUrl } : {}),
     ...(typeof taglineBn === 'string' ? { taglineBn: taglineBn.trim() } : {}),
     ...(typeof taglineEn === 'string' ? { taglineEn: taglineEn.trim() } : {})
   };

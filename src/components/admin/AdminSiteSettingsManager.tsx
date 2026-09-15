@@ -54,9 +54,10 @@ export function AdminSiteSettingsManager() {
 
       if (res.ok) {
         setNotification({ type: 'success', text: 'সাইট লোগো ও ব্র্যান্ডিং সফলভাবে সেভ হয়েছে!' });
+        window.dispatchEvent(new CustomEvent('site-settings-updated'));
         setTimeout(() => {
           window.location.reload();
-        }, 1200);
+        }, 1000);
       } else {
         const err = await res.json();
         setNotification({ type: 'error', text: err.error || 'সেটিংস সেভ করতে সমস্যা হয়েছে' });
@@ -143,14 +144,30 @@ export function AdminSiteSettingsManager() {
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
             লোগো ছবির ইউআরএল (Logo Image URL বা লোকাল পাথ)
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
               value={settings.logoUrl || ''}
-              onChange={(e) => setSettings({ ...settings, logoUrl: e.target.value })}
-              placeholder="/site-logo.png বা https://..."
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#070b14] border border-slate-200 dark:border-[#162035] text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden focus:border-amber-500"
+              onChange={(e) => {
+                let val = e.target.value;
+                if (val.includes('kommodo.ai/i/')) {
+                  const match = val.match(/kommodo\.ai\/i\/([a-zA-Z0-9_-]+)/);
+                  if (match && match[1]) {
+                    val = `https://plain-apac-prod-public.komododecks.com/202609/15/${match[1]}/image.png`;
+                  }
+                }
+                setSettings({ ...settings, logoUrl: val });
+              }}
+              placeholder="https://... বা /site-logo.png"
+              className="flex-1 min-w-[220px] px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#070b14] border border-slate-200 dark:border-[#162035] text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden focus:border-amber-500"
             />
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, logoUrl: 'https://plain-apac-prod-public.komododecks.com/202609/15/ITIrJC4dcVtKMXpxe1Il/image.png' })}
+              className="px-3 py-2.5 rounded-xl bg-amber-500/10 text-xs font-bold text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer shrink-0"
+            >
+              আপনার লোগো
+            </button>
             <button
               type="button"
               onClick={() => setSettings({ ...settings, logoUrl: '/site-logo.png' })}
@@ -167,7 +184,7 @@ export function AdminSiteSettingsManager() {
             </button>
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            টিপস: সিস্টেমের অভ্যন্তরীণ লোগো ব্যবহার করতে <code className="text-amber-500 font-mono">/site-logo.png</code> অথবা <code className="text-amber-500 font-mono">/logo-icon.png</code> দিন।
+            টিপস: আপনি সরাসরি যেকোনো ইমেজ লিংক (যেমন <code className="text-amber-500 font-mono">https://.../image.png</code>) বা সিস্টেমের লোগো দিতে পারেন।
           </p>
         </div>
 

@@ -38,15 +38,38 @@ export default function App() {
     taglineEn: '24/7 Cloud Bot & Top Up Service'
   });
 
-  useEffect(() => {
+  const fetchSiteSettings = () => {
     fetch('/api/site-settings')
       .then((res) => res.json())
       .then((data) => {
         if (data.settings) {
           setSiteSettings(data.settings);
+          // Dynamically update page title and favicon
+          if (data.settings.siteName) {
+            document.title = data.settings.siteName;
+          }
+          if (data.settings.logoUrl) {
+            const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+            if (iconLink) {
+              iconLink.href = data.settings.logoUrl;
+            }
+            const appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+            if (appleIcon) {
+              appleIcon.href = data.settings.logoUrl;
+            }
+          }
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchSiteSettings();
+    const handleSettingsUpdate = () => fetchSiteSettings();
+    window.addEventListener('site-settings-updated', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('site-settings-updated', handleSettingsUpdate);
+    };
   }, []);
 
   const [lang, setLang] = useState<'bn' | 'en'>(() => {
