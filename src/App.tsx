@@ -491,6 +491,36 @@ export default function App() {
     setShowNewBotModal(true);
   };
 
+  const handleClaimFreeTrial = async () => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+    try {
+      const token = localStorage.getItem('bot_auth_token');
+      const res = await fetch('/api/free-trial/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToastMessage(data.error || 'ফ্রি ট্রায়াল ক্লেইম করা সম্ভব হয়নি');
+        return;
+      }
+      if (data.user) {
+        setCurrentUser(data.user);
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      }
+      setToastMessage(data.message || (lang === 'bn' ? '🎉 অভিনন্দন! ১ মাসের ফ্রি ট্রায়াল প্ল্যান সক্রিয় হয়েছে!' : '1-Month Free Trial Activated!'));
+      fetchBots();
+    } catch (err: any) {
+      setToastMessage(err.message || 'Error claiming free trial');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col selection:bg-[#00d293] selection:text-slate-950 pb-20 sm:pb-8">
       {/* Top App Store Header */}
@@ -696,6 +726,8 @@ export default function App() {
               hasActivePlan={hasActivePlan}
               onOpenPlans={() => setActiveTab('plans')}
               lang={lang}
+              user={currentUser}
+              onClaimFreeTrial={handleClaimFreeTrial}
             />
           </div>
         )}

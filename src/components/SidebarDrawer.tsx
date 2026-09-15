@@ -150,10 +150,20 @@ export function SidebarDrawer({
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 shrink-0 flex items-center justify-center shadow-xs">
                   <img
-                    src={siteSettings?.logoUrl || '/logo-icon.png'}
+                    src={siteSettings?.logoUrl || '/site-logo.png'}
                     alt="Logo"
                     className="w-full h-full object-contain p-0.5"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget as HTMLImageElement;
+                      if (!target.src.endsWith('site-logo.png')) {
+                        target.src = '/site-logo.png';
+                      } else if (!target.src.endsWith('site-logo.jpg')) {
+                        target.src = '/site-logo.jpg';
+                      } else if (!target.src.endsWith('logo-icon.png')) {
+                        target.src = '/logo-icon.png';
+                      }
+                    }}
                   />
                 </div>
                 <div className="flex flex-col min-w-0">

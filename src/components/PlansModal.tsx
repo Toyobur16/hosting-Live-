@@ -4,7 +4,7 @@ import {
   Send, CheckCircle2, AlertCircle, Copy, HelpCircle, Wallet,
   ArrowRight, PlusCircle, RefreshCw, AlertTriangle, ArrowUpRight
 } from 'lucide-react';
-import { HostingPlan, PaymentSettings, AuthUser, PlanRequest } from '../types';
+import { HostingPlan, PaymentSettings, AuthUser, PlanRequest, FreeTrialSettings } from '../types';
 
 interface PlansModalProps {
   isOpen: boolean;
@@ -24,6 +24,8 @@ export const PlansModal: React.FC<PlansModalProps> = ({
   onUserUpdated
 }) => {
   const [plans, setPlans] = useState<HostingPlan[]>([]);
+  const [freeTrial, setFreeTrial] = useState<FreeTrialSettings | null>(null);
+  const [claimingTrial, setClaimingTrial] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
   const [activeView, setActiveView] = useState<'plans' | 'deposit' | 'history'>('plans');
 
@@ -97,6 +99,9 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         headers: { 'Cache-Control': 'no-cache' }
       });
       const data = await res.json();
+      if (data.freeTrial) {
+        setFreeTrial(data.freeTrial);
+      }
       if (data.plans && Array.isArray(data.plans)) {
         // Sort plans in order: free -> 1_month -> 3_months -> 6_months -> 1_year -> custom
         const orderMap: { [key: string]: number } = {
@@ -114,6 +119,40 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         setPlans(sorted);
       }
     } catch {}
+  };
+
+  const handleClaimFreeTrial = async () => {
+    if (!user) {
+      onOpenAuthModal();
+      return;
+    }
+    setClaimingTrial(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const token = localStorage.getItem('bot_auth_token');
+      const res = await fetch('/api/free-trial/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ফ্রি ট্রায়াল সক্রিয় করা যায়নি');
+      }
+      setSuccessMsg(data.message || (lang === 'bn' ? '🎉 ১ মাসের ফ্রি ট্রায়াল সক্রিয় হয়েছে!' : 'Free Trial Activated!'));
+      if (data.user) {
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        if (onUserUpdated) onUserUpdated(data.user);
+      }
+      fetchPlans();
+    } catch (err: any) {
+      setError(err.message || 'Error claiming free trial');
+    } finally {
+      setClaimingTrial(false);
+    }
   };
 
   const fetchPaymentSettings = async () => {
@@ -390,6 +429,80 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
               {/* Plans Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {/* 1-Month Free Trial Card (Visible ONLY for users who haven't claimed it yet) */}
+                {(!user || !user.hasClaimedFreeTrial) && (freeTrial ? freeTrial.enabled : true) && (
+                  <div className="relative rounded-2xl p-4 transition-all border flex flex-col justify-between bg-gradient-to-b from-emerald-950/40 via-teal-950/20 to-[#0d1524] border-emerald-500 shadow-lg shadow-emerald-500/10">
+                    <span className="absolute -top-2.5 right-4 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-md">
+                      {lang === 'bn' ? '🎁 ১ মাস ফ্রি' : '🎁 1 Month Free'}
+                    </span>
+
+                    <div>
+                      {/* Plan Header */}
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="font-extrabold text-base text-white">
+                          {lang === 'bn' ? (freeTrial?.nameBn || '১ মাস ফ্রি ট্রায়াল') : (freeTrial?.nameEn || '1 Month Free Trial')}
+                        </h5>
+                        <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-500/15">
+                          {lang === 'bn' ? 'নতুন ইউজার' : 'New User'}
+                        </span>
+                      </div>
+
+                      {/* Price Display */}
+                      <div className="mb-3">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl font-black text-emerald-400">$0.00 / Free</span>
+                          <span className="text-xs text-slate-400 font-medium">({freeTrial?.durationDays || 30} {lang === 'bn' ? 'দিন' : 'days'})</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-400/90 font-medium mt-0.5">
+                          {lang === 'bn' ? '১টি বট ২৪/৭ সার্বক্ষণিক লাইভ হোস্টিং' : '1 Bot 24/7 Live Hosting'}
+                        </p>
+                      </div>
+
+                      {/* Features */}
+                      <ul className="space-y-1.5 mb-4 border-t border-[#1f2d48] pt-2.5 text-xs text-slate-300">
+                        {(lang === 'bn'
+                          ? (freeTrial?.featuresBn || [
+                              '১টি টেলিগ্রাম বট ২৪/৭ লাইভ হোস্টিং',
+                              '১ মাস সম্পূর্ণ ফ্রি অ্যাক্সেস',
+                              'অটো-রিস্টার্ট ওয়াচডগ ও রিয়েল-টাইম লগস'
+                            ])
+                          : (freeTrial?.featuresEn || [
+                              '1 Telegram Bot 24/7 Live Hosting',
+                              '1 Month Completely Free Access',
+                              'Auto-Restart Watchdog & Real-time Logs'
+                            ])
+                        ).slice(0, 3).map((feat, fIdx) => (
+                          <li key={fIdx} className="flex items-start gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                            <span className="leading-snug">{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Action */}
+                    <div className="pt-2 border-t border-[#1f2d48]">
+                      <button
+                        onClick={handleClaimFreeTrial}
+                        disabled={claimingTrial}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-md shadow-emerald-500/20 active:scale-98"
+                      >
+                        {claimingTrial ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>{lang === 'bn' ? 'সক্রিয় হচ্ছে...' : 'Activating...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>{user ? (lang === 'bn' ? '🎁 ১ মাসের ফ্রি প্ল্যান নিন' : 'Claim 1 Month Free') : (lang === 'bn' ? 'লগইন করে ফ্রি নিন' : 'Login to Claim Free')}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {plans.map((p, idx) => {
                   const isFree = p.id === 'free';
                   const isCurrent = user?.plan === p.id;

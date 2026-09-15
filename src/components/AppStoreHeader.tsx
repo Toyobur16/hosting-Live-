@@ -83,22 +83,29 @@ export function AppStoreHeader({
             onClick={() => onSelectTab('home')}
             className="flex items-center gap-2 sm:gap-3 group cursor-pointer text-left focus:outline-hidden shrink-0"
           >
-            <div className="h-9 sm:h-10 w-9 sm:w-10 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 flex items-center justify-center shadow-md shadow-amber-500/10 group-hover:scale-105 transition-transform shrink-0">
+            <div className="h-9.5 sm:h-10.5 w-9.5 sm:w-10.5 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/50 flex items-center justify-center shadow-md shadow-amber-500/10 group-hover:scale-105 transition-transform shrink-0">
               <img
-                src={siteSettings?.logoUrl || '/logo-icon.png'}
+                src={siteSettings?.logoUrl || '/site-logo.png'}
                 alt={siteSettings?.siteName || 'Logo'}
                 className="w-full h-full object-contain p-0.5"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = 'none';
+                  const target = e.currentTarget as HTMLImageElement;
+                  if (!target.src.endsWith('site-logo.png')) {
+                    target.src = '/site-logo.png';
+                  } else if (!target.src.endsWith('site-logo.jpg')) {
+                    target.src = '/site-logo.jpg';
+                  } else if (!target.src.endsWith('logo-icon.png')) {
+                    target.src = '/logo-icon.png';
+                  }
                 }}
               />
             </div>
-            <div className="flex flex-col min-w-0 max-w-[125px] xs:max-w-[170px] sm:max-w-none">
-              <span className="text-xs sm:text-base lg:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1 truncate">
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm sm:text-base lg:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 whitespace-nowrap">
                 {siteSettings?.siteName || 'FAKIR BD TOP UP'}
               </span>
-              <span className="hidden xs:inline text-[8px] sm:text-[10px] font-bold text-amber-500 dark:text-amber-400 tracking-wider uppercase truncate">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 dark:text-amber-400 tracking-wider uppercase truncate">
                 {lang === 'bn'
                   ? (siteSettings?.taglineBn || '২৪/৭ ক্লাউড বট ও টপ আপ')
                   : (siteSettings?.taglineEn || '24/7 Cloud Bot & Top Up')}

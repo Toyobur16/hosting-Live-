@@ -1,5 +1,30 @@
 [
   {
+    "id": "free_trial_1m",
+    "nameBn": "১ মাস ফ্রি ট্রায়াল (নতুন ইউজার)",
+    "nameEn": "1-Month Free Trial (New Users)",
+    "durationDays": 30,
+    "maxBots": 1,
+    "priceBdt": 0,
+    "priceUsd": 0,
+    "popular": false,
+    "isFreeTrial": true,
+    "featuresBn": [
+      "১টি টেলিগ্রাম বট লাইভ হোস্টিং",
+      "১ মাস (৩০ দিন) সম্পূর্ণ ফ্রি অ্যাক্টিভেশন",
+      "২৪/৭ ক্লাউড অটো-রিস্টার্ট ওয়াচডগ",
+      "নতুন ইউজারের জন্য স্পেশাল অফার (১ বার)",
+      "লাইভ কনসোল ও রিয়েল-টাইম লগস"
+    ],
+    "featuresEn": [
+      "1 Telegram Bot Live Hosting",
+      "1 Month (30 Days) Completely Free",
+      "24/7 Cloud Auto-Restart Watchdog",
+      "New User Exclusive Welcome Offer (1 Time)",
+      "Live Console & Real-time Logs"
+    ]
+  },
+  {
     "id": "1_month",
     "nameBn": "১ মাস প্লান",
     "nameEn": "1 Month Plan",

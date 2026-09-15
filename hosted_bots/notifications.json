@@ -1,5 +1,14 @@
 [
   {
+    "id": "notif_1789452293219_psi1",
+    "userId": "user_1789452289817_ao4c",
+    "type": "plan_purchased",
+    "title": "🎉 ১ মাসের ফ্রি ট্রায়াল প্ল্যান সক্রিয় হয়েছে!",
+    "message": "অভিনন্দন! আপনি ১ মাসের (30 দিন) জন্য ১টি টেলিগ্রাম বট ফ্রি হোস্টিং সুবিধা পেয়েছেন। মেয়াদ: ১৫/১০/২০২৬ পর্যন্ত।",
+    "createdAt": "2026-09-15T06:04:53.234Z",
+    "read": false
+  },
+  {
     "id": "notif_1789353473912_1530",
     "userId": "toyoburrahman560@gmail.com",
     "userEmail": "toyoburrahman560@gmail.com",

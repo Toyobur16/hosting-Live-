@@ -6,7 +6,7 @@ import {
   Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones, BellRing,
   Mail, ArrowUp, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, BarChart3, Layers, Sliders
 } from 'lucide-react';
-import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
+import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan, FreeTrialSettings } from '../types';
 import { AdminBannersManager } from './admin/AdminBannersManager';
 import { AdminSupportManager } from './admin/AdminSupportManager';
 import { AdminNoticesManager } from './admin/AdminNoticesManager';
@@ -86,6 +86,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     featuresBn: '২৪/৭ সার্বক্ষণিক লাইভ বট\nস্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট\nলাইভ কনসোল ও লগস',
     featuresEn: '24/7 Priority Bot Uptime\nAuto Crash Recovery\nLive Console & Logs'
   });
+
+  // Free Trial Management State
+  const [freeTrialSettings, setFreeTrialSettings] = useState<FreeTrialSettings>({
+    enabled: true,
+    durationDays: 30,
+    maxBots: 1,
+    nameBn: '১ মাস ফ্রি ট্রায়াল',
+    nameEn: '1 Month Free Trial',
+    featuresBn: [
+      '১টি টেলিগ্রাম বট ২৪/৭ সার্বক্ষণিক লাইভ হোস্টিং',
+      '১ মাস (৩০ দিন) সম্পূর্ণ ফ্রি অ্যাক্সেস',
+      'অটো-রিস্টার্ট ও ক্র্যাশ প্রোটেকশন',
+      'লাইভ কনসোল ও রিয়েল-টাইম লগস',
+      'ফাইল এডিটর ও ডাটাবেজ ব্যাকআপ'
+    ],
+    featuresEn: [
+      '1 Telegram Bot 24/7 Live Hosting',
+      '1 Month (30 Days) Completely Free Access',
+      'Auto-Restart & Crash Protection',
+      'Live Console & Real-time Logs',
+      'File Editor & Database Backup'
+    ]
+  });
+  const [freeTrialBnFeatures, setFreeTrialBnFeatures] = useState('');
+  const [freeTrialEnFeatures, setFreeTrialEnFeatures] = useState('');
+  const [savingFreeTrial, setSavingFreeTrial] = useState(false);
+  const [freeTrialMsg, setFreeTrialMsg] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
@@ -182,11 +209,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         setAllBots(bData.bots || []);
       }
 
-      // 6. Hosting Plans
+      // 6. Hosting Plans & Free Trial
       const plRes = await fetch('/api/plans');
       if (plRes.ok) {
         const plData = await plRes.json();
         setPlans(plData.plans || []);
+        if (plData.freeTrial) {
+          setFreeTrialSettings(plData.freeTrial);
+          setFreeTrialBnFeatures(Array.isArray(plData.freeTrial.featuresBn) ? plData.freeTrial.featuresBn.join('\n') : '');
+          setFreeTrialEnFeatures(Array.isArray(plData.freeTrial.featuresEn) ? plData.freeTrial.featuresEn.join('\n') : '');
+        }
       }
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message || 'Error loading admin data' });
@@ -418,6 +450,91 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       loadAllAdminData();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
+    }
+  };
+
+  const handleSaveFreeTrialSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingFreeTrial(true);
+    setFreeTrialMsg(null);
+    const token = localStorage.getItem('bot_auth_token');
+    try {
+      const payload = {
+        ...freeTrialSettings,
+        durationDays: Number(freeTrialSettings.durationDays) || 30,
+        maxBots: Number(freeTrialSettings.maxBots) || 1,
+        featuresBn: freeTrialBnFeatures.split('\n').map(s => s.trim()).filter(Boolean),
+        featuresEn: freeTrialEnFeatures.split('\n').map(s => s.trim()).filter(Boolean)
+      };
+      const res = await fetch('/api/admin/free-trial/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save free trial settings');
+      }
+      setFreeTrialMsg(data.message || 'ফ্রি ট্রায়াল সেটিংস সফলভাবে সংরক্ষিত হয়েছে!');
+      if (data.settings) {
+        setFreeTrialSettings(data.settings);
+      }
+      setNotification({ type: 'success', message: 'ফ্রি ট্রায়াল সেটিংস সফলভাবে আপডেট করা হয়েছে!' });
+      if (onPlansUpdated) onPlansUpdated();
+    } catch (err: any) {
+      setFreeTrialMsg('ত্রুটি: ' + (err.message || 'সেভ করা সম্ভব হয়নি'));
+      setNotification({ type: 'error', message: err.message || 'Failed to save free trial settings' });
+    } finally {
+      setSavingFreeTrial(false);
+    }
+  };
+
+  const handleGrantFreeTrialUser = async (userId: string) => {
+    const token = localStorage.getItem('bot_auth_token');
+    setActionLoadingId('grant_' + userId);
+    try {
+      const res = await fetch('/api/admin/free-trial/grant-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to grant trial');
+      setNotification({ type: 'success', message: data.message || '১ মাসের ফ্রি প্ল্যান দেওয়া হয়েছে!' });
+      loadAllAdminData();
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message || 'Error granting free trial' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleResetFreeTrialUser = async (userId: string) => {
+    const token = localStorage.getItem('bot_auth_token');
+    setActionLoadingId('reset_' + userId);
+    try {
+      const res = await fetch('/api/admin/free-trial/reset-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset trial');
+      setNotification({ type: 'success', message: data.message || 'ফ্রি ট্রায়াল স্ট্যাটাস রিসেট করা হয়েছে!' });
+      loadAllAdminData();
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message || 'Error resetting free trial' });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -796,8 +913,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       {u.role || 'user'}
                     </span>
                     <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-bold uppercase text-[10px]">
-                      {u.activePlan || 'free'}
+                      {u.activePlan || u.plan || 'free'}
                     </span>
+                    {u.hasClaimedFreeTrial && (
+                      <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 font-bold text-[10px]">
+                        ট্রায়াল ক্লেইমড ✓
+                      </span>
+                    )}
                   </div>
                   <p className="text-slate-400 text-xs">{u.email}</p>
                   
@@ -816,6 +938,25 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => handleGrantFreeTrialUser(u.id)}
+                    disabled={actionLoadingId === 'grant_' + u.id}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-800 border border-emerald-700 text-emerald-300 text-[11px] font-semibold cursor-pointer transition-colors flex items-center gap-1"
+                    title="ইউজারকে সরাসরি ১ মাসের ফ্রি ট্রায়াল দিন"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>{actionLoadingId === 'grant_' + u.id ? 'দিচ্ছে...' : '🎁 ১ মাস ফ্রি দিন'}</span>
+                  </button>
+                  {u.hasClaimedFreeTrial && (
+                    <button
+                      onClick={() => handleResetFreeTrialUser(u.id)}
+                      disabled={actionLoadingId === 'reset_' + u.id}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-800 border border-indigo-700 text-indigo-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                      title="ফ্রি ট্রায়াল ক্লেইম হিস্ট্রি রিসেট করুন যাতে ইউজার আবার ট্রায়াল নিতে পারে"
+                    >
+                      <span>{actionLoadingId === 'reset_' + u.id ? 'রিসেট হচ্ছে...' : '🔄 ট্রায়াল রিসেট'}</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleUserPlanUpdate(u.id, '1_month', 30, 3, u.role)}
                     className="px-2.5 py-1 rounded-lg bg-[#16233b] hover:bg-[#0088cc] text-slate-300 hover:text-white text-[11px] font-medium border border-[#1f2d48] cursor-pointer transition-colors"
@@ -869,6 +1010,154 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <Plus className="w-4 h-4" />
                 <span>{showAddPlanForm ? 'ফর্ম বন্ধ করুন' : '+ নতুন প্যাকেজ যোগ করুন'}</span>
               </button>
+            </div>
+
+            {/* 🎁 1-Month Free Trial Configuration Card for New Users */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-emerald-950/40 via-[#0d1627] to-[#0a0f1d] border-2 border-emerald-500/50 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#1f2d48] pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="font-black text-sm text-white flex items-center gap-2">
+                      <span>{lang === 'bn' ? '🎁 ১ মাস ফ্রি ট্রায়াল প্ল্যান সেটিংস (নতুন ইউজার)' : '🎁 1-Month Free Trial Plan Settings'}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        freeTrialSettings.enabled ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {freeTrialSettings.enabled ? (lang === 'bn' ? 'সক্রিয়' : 'Enabled') : (lang === 'bn' ? 'বন্ধ' : 'Disabled')}
+                      </span>
+                    </h5>
+                    <p className="text-[11px] text-slate-400">
+                      {lang === 'bn'
+                        ? 'নতুন ইউজার রেজিস্ট্রেশন বা গুগল লগইন করলে এক মাসের জন্য ১টি বট সম্পূর্ণ ফ্রিতে লাইভ হোস্ট করতে পারবে।'
+                        : 'New users can claim a 1-month free trial to host 1 bot live for 30 days.'}
+                    </p>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-xl bg-[#132035] border border-[#233758]">
+                  <input
+                    type="checkbox"
+                    checked={freeTrialSettings.enabled}
+                    onChange={(e) => setFreeTrialSettings({ ...freeTrialSettings, enabled: e.target.checked })}
+                    className="w-4 h-4 rounded text-emerald-500"
+                  />
+                  <span className="text-xs font-bold text-white">
+                    {lang === 'bn' ? 'ফ্রি ট্রায়াল চালু রাখুন' : 'Enable Free Trial'}
+                  </span>
+                </label>
+              </div>
+
+              {freeTrialMsg && (
+                <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{freeTrialMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveFreeTrialSettings} className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'প্ল্যান নাম (বাংলা):' : 'Plan Name (Bangla):'}
+                    </label>
+                    <input
+                      type="text"
+                      value={freeTrialSettings.nameBn}
+                      onChange={(e) => setFreeTrialSettings({ ...freeTrialSettings, nameBn: e.target.value })}
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'প্ল্যান নাম (English):' : 'Plan Name (English):'}
+                    </label>
+                    <input
+                      type="text"
+                      value={freeTrialSettings.nameEn}
+                      onChange={(e) => setFreeTrialSettings({ ...freeTrialSettings, nameEn: e.target.value })}
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'মেয়াদ (দিন) [সাধারণত ৩০ দিন]:' : 'Duration (Days) [Default: 30]:'}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={freeTrialSettings.durationDays}
+                      onChange={(e) => setFreeTrialSettings({ ...freeTrialSettings, durationDays: Number(e.target.value) || 30 })}
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'বট লিমিট (সংখ্যা) [সাধারণত ১টি]:' : 'Max Bots Limit [Default: 1]:'}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={freeTrialSettings.maxBots}
+                      onChange={(e) => setFreeTrialSettings({ ...freeTrialSettings, maxBots: Number(e.target.value) || 1 })}
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'ফ্রি ট্রায়ালের সুবিধাসমূহ (বাংলা - প্রতি লাইনে ১টি):' : 'Features (Bangla - one per line):'}
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={freeTrialBnFeatures}
+                      onChange={(e) => setFreeTrialBnFeatures(e.target.value)}
+                      placeholder="১টি টেলিগ্রাম বট ২৪/৭ লাইভ হোস্টিং&#10;১ মাস সম্পূর্ণ ফ্রি অ্যাক্সেস&#10;অটো-রিস্টার্ট ও ক্র্যাশ প্রোটেকশন"
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {lang === 'bn' ? 'Features (English - one per line):' : 'Features (English - one per line):'}
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={freeTrialEnFeatures}
+                      onChange={(e) => setFreeTrialEnFeatures(e.target.value)}
+                      placeholder="1 Telegram Bot 24/7 Live Hosting&#10;1 Month Completely Free Access&#10;Auto-Restart & Crash Protection"
+                      className="w-full bg-[#090f1a] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                  <span className="text-[11px] text-emerald-400/90 font-medium">
+                    {lang === 'bn'
+                      ? '✓ নতুন ইউজার শুধু একবারই এই ফ্রি ট্রায়ালটি ক্লেইম করতে পারবেন।'
+                      : '✓ New users can only claim this free trial once.'}
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={savingFreeTrial}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {savingFreeTrial ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{lang === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>{lang === 'bn' ? 'ফ্রি ট্রায়াল সেটিংস সেভ করুন' : 'Save Free Trial Settings'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* Expandable Add Plan Form */}

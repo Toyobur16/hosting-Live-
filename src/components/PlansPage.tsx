@@ -4,7 +4,7 @@ import {
   CheckCircle2, ArrowRight, Wallet, RefreshCw, Clock, Bot,
   CreditCard, ChevronRight, ShoppingCart, X, AlertTriangle
 } from 'lucide-react';
-import { HostingPlan, AuthUser } from '../types';
+import { HostingPlan, AuthUser, FreeTrialSettings } from '../types';
 import { FAQAccordion } from './FAQAccordion';
 
 interface PlansPageProps {
@@ -27,6 +27,8 @@ export const PlansPage: React.FC<PlansPageProps> = ({
   onNavigateToSupport
 }) => {
   const [plans, setPlans] = useState<HostingPlan[]>([]);
+  const [freeTrial, setFreeTrial] = useState<FreeTrialSettings | null>(null);
+  const [claimingTrial, setClaimingTrial] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedCurrency] = useState<'USD'>('USD');
   const [purchasingPlanId, setPurchasingPlanId] = useState<string | null>(null);
@@ -61,6 +63,9 @@ export const PlansPage: React.FC<PlansPageProps> = ({
         headers: { 'Cache-Control': 'no-cache' }
       });
       const data = await res.json();
+      if (data.freeTrial) {
+        setFreeTrial(data.freeTrial);
+      }
       if (data.plans && Array.isArray(data.plans)) {
         const orderMap: Record<string, number> = {
           '1_month': 1,
@@ -80,6 +85,40 @@ export const PlansPage: React.FC<PlansPageProps> = ({
       // Ignore
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClaimFreeTrial = async () => {
+    if (!user) {
+      onOpenAuthModal();
+      return;
+    }
+    setClaimingTrial(true);
+    setPurchaseError(null);
+    setPurchaseSuccess(null);
+    try {
+      const token = localStorage.getItem('bot_auth_token');
+      const res = await fetch('/api/free-trial/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ফ্রি ট্রায়াল ক্লেইম করা যায়নি');
+      }
+      setPurchaseSuccess(data.message || (lang === 'bn' ? '🎉 অভিনন্দন! ১ মাসের ফ্রি ট্রায়াল প্ল্যান সক্রিয় হয়েছে!' : '1-Month Free Trial Activated!'));
+      if (data.user) {
+        localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+        onPlanActivated(data.user);
+      }
+      fetchPlans();
+    } catch (err: any) {
+      setPurchaseError(err.message || 'Error claiming free trial');
+    } finally {
+      setClaimingTrial(false);
     }
   };
 
@@ -260,6 +299,102 @@ export const PlansPage: React.FC<PlansPageProps> = ({
 
       {/* Plans Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* 1-Month Free Trial Plan Card (Visible ONLY if user has NOT claimed it yet) */}
+        {(!user || !user.hasClaimedFreeTrial) && (freeTrial ? freeTrial.enabled : true) && (
+          <div className="rounded-3xl p-6 flex flex-col justify-between transition-all relative bg-gradient-to-b from-emerald-950/40 via-teal-950/20 to-slate-900/90 border-2 border-emerald-500 shadow-xl shadow-emerald-500/15">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1 whitespace-nowrap">
+              <Sparkles className="w-3 h-3" />
+              <span>{lang === 'bn' ? '১ মাস সম্পূর্ণ ফ্রি (নতুন ইউজার)' : '1 Month Free (New User)'}</span>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <span>{lang === 'bn' ? (freeTrial?.nameBn || '১ মাস ফ্রি ট্রায়াল') : (freeTrial?.nameEn || '1 Month Free Trial')}</span>
+                </h3>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-bold text-[11px]">
+                    {freeTrial?.durationDays || 30} {lang === 'bn' ? 'দিন মেয়াদ' : 'Days Free'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-bold text-[11px]">
+                    {freeTrial?.maxBots || 1} {lang === 'bn' ? 'টি বট হোস্টিং' : 'Bot Hosting'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Price Display */}
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-black text-emerald-400">
+                    $0.00
+                  </span>
+                  <span className="text-xs font-bold text-emerald-300">
+                    / {lang === 'bn' ? '৩০ দিন ফ্রি' : '30 Days Free'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-400 font-bold mt-0.5">
+                  {lang === 'bn' ? 'প্রতি নতুন ইউজারের জন্য ১ বার প্রযোজ্য' : 'Valid once for new users'}
+                </div>
+              </div>
+
+              {/* Features list */}
+              <div className="space-y-2 pt-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {lang === 'bn' ? 'ফ্রি ট্রায়াল সুবিধাসমূহ:' : 'Free Trial Includes:'}
+                </span>
+                <ul className="space-y-2">
+                  {(lang === 'bn'
+                    ? (freeTrial?.featuresBn || [
+                        '১টি টেলিগ্রাম বট ২৪/৭ সার্বক্ষণিক লাইভ হোস্টিং',
+                        '১ মাস (৩০ দিন) সম্পূর্ণ ফ্রি অ্যাক্সেস',
+                        'অটো-রিস্টার্ট ও ক্র্যাশ প্রোটেকশন',
+                        'লাইভ কনসোল ও রিয়েল-টাইম লগস',
+                        'ফাইল এডিটর ও ডাটাবেজ ব্যাকআপ'
+                      ])
+                    : (freeTrial?.featuresEn || [
+                        '1 Telegram Bot 24/7 Live Hosting',
+                        '1 Month (30 Days) Completely Free Access',
+                        'Auto-Restart & Crash Protection',
+                        'Live Console & Real-time Logs',
+                        'File Editor & Database Backup'
+                      ])
+                  ).map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Claim Button */}
+            <div className="pt-6 border-t border-slate-100 dark:border-[#1f293d] mt-4">
+              <button
+                type="button"
+                onClick={handleClaimFreeTrial}
+                disabled={claimingTrial}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {claimingTrial ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>{lang === 'bn' ? 'সক্রিয় হচ্ছে...' : 'Activating...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-slate-950" />
+                    <span>{user ? (lang === 'bn' ? '🎁 ১ মাসের ফ্রি প্ল্যান নিন' : '🎁 Claim 1-Month Free') : (lang === 'bn' ? 'লগইন করে ১ মাস ফ্রি নিন' : 'Login to Claim Free Trial')}</span>
+                  </>
+                )}
+              </button>
+              <p className="text-[10px] text-center text-emerald-400/90 mt-2 font-medium">
+                {lang === 'bn' ? '১টি বট ২৪/৭ সার্বক্ষণিক লাইভ থাকবে' : '1 Bot will run 24/7 live'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {plans.map((plan) => {
           const isPopular = Boolean(plan.popular);
           const price = plan.priceUsd || 1.5;

@@ -1085,9 +1085,9 @@ export async function checkAndSendExpiringPlanAlerts(
       }
     } else if (account.planExpiresAt <= now) {
       // Plan has expired
-      console.log(`[EXPIRED PLAN] Account ${account.email} has expired. Downgrading to Free.`);
-      account.plan = 'free';
-      account.maxBots = 1;
+      console.log(`[EXPIRED PLAN] Account ${account.email} has expired.`);
+      account.plan = 'expired';
+      account.maxBots = 0;
       account.planExpiresAt = null;
       modified = true;
       expiredCount++;
@@ -1097,17 +1097,22 @@ export async function checkAndSendExpiringPlanAlerts(
         to: account.email,
         userId: account.id,
         type: 'plan_expired',
-        subject: '⚠️ আপনার hosting-Live Fast হোস্টিং প্ল্যানের মেয়াদ সমাপ্ত হয়েছে',
+        subject: '⚠️ আপনার ফ্রি/পেইড প্ল্যানের মেয়াদ শেষ হয়েছে - বট সাময়িক বন্ধ রয়েছে',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #070b14; color: #f8fafc; padding: 24px; border-radius: 12px; border: 1px solid #162035;">
-            <h2 style="color: #ef4444; margin: 0 0 10px 0;">মেয়াদ সমাপ্ত হয়েছে (Plan Expired)</h2>
+            <h2 style="color: #ef4444; margin: 0 0 10px 0;">প্ল্যানের মেয়াদ সমাপ্ত হয়েছে (Plan Expired)</h2>
             <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6;">
               প্রিয় <strong>${account.name || 'গ্রাহক'}</strong>,<br>
-              আপনার হোস্টিং প্ল্যানের মেয়াদ শেষ হয়েছে। একাউন্ট ফ্রি প্ল্যানে ডাউনগ্রেড করা হয়েছে। বটের সেবা পুনরায় সচল রাখতে অনুগ্রহ করে ওয়ালেটে ডিপোজিট করে প্যাকেজ রিনিউ করুন।
+              আপনার ফ্রি প্ল্যানটি বন্ধ হয়ে গেছে। দয়া করে একটি প্রিমিয়াম প্ল্যান কিনুন, আপনার আগের টেলিগ্রাম বট সাথে সাথে আবার লাইভ হয়ে যাবে!
             </p>
+            <div style="text-align: center; margin-top: 20px;">
+              <a href="#" style="display: inline-block; background: #00d293; color: #070b14; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">
+                প্ল্যান কিনুন ও বট লাইভ করুন
+              </a>
+            </div>
           </div>
         `,
-        text: 'আপনার hosting-Live Fast পেইড প্ল্যানের মেয়াদ শেষ হয়েছে। একাউন্ট ফ্রি প্ল্যানে ডাউনগ্রেড করা হয়েছে।'
+        text: 'আপনার ফ্রি প্ল্যানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!'
       });
 
       if (stopExcessBotsCallback) {

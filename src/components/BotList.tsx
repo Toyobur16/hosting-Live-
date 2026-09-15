@@ -23,9 +23,10 @@ import {
   ExternalLink,
   Code2,
   History,
-  Tag
+  Tag,
+  Zap
 } from 'lucide-react';
-import { HostedBot } from '../types';
+import { HostedBot, AuthUser } from '../types';
 
 interface BotListProps {
   bots: HostedBot[];
@@ -42,6 +43,8 @@ interface BotListProps {
   hasActivePlan?: boolean;
   onOpenPlans?: () => void;
   lang: 'bn' | 'en';
+  user?: AuthUser | null;
+  onClaimFreeTrial?: () => void;
 }
 
 export const BotList: React.FC<BotListProps> = ({
@@ -58,7 +61,9 @@ export const BotList: React.FC<BotListProps> = ({
   onOpenDeployments,
   hasActivePlan = false,
   onOpenPlans,
-  lang
+  lang,
+  user,
+  onClaimFreeTrial
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [botToDelete, setBotToDelete] = useState<HostedBot | null>(null);
@@ -136,6 +141,73 @@ export const BotList: React.FC<BotListProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Expired Free Trial or Plan Notification Banner */}
+      {user && (user.plan === 'expired' || (user.planExpiresAt && user.planExpiresAt < Date.now())) && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/15 border-2 border-amber-500/40 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span>{lang === 'bn' ? '⚠️ আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে' : '⚠️ Your Free Plan Has Expired'}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500 text-white uppercase tracking-wider">
+                  {lang === 'bn' ? 'মেয়াদ শেষ' : 'Expired'}
+                </span>
+              </h4>
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-medium mt-1 leading-relaxed">
+                {lang === 'bn'
+                  ? 'আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!'
+                  : 'Your free plan has expired. Please buy a plan, your previous bot will be live immediately!'}
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                {lang === 'bn'
+                  ? '✓ আপনার পূর্বের বটের কোড, ডাটাবেজ ও সব ফাইল সম্পূর্ণ অক্ষত আছে।'
+                  : '✓ All your bot files and database are preserved.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onOpenPlans}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/30 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{lang === 'bn' ? '💳 এখনই প্ল্যান কিনুন' : '💳 Buy Plan Now'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Eligible for 1-Month Free Trial Banner (Visible only for users who haven't claimed it yet) */}
+      {user && !user.hasClaimedFreeTrial && user.plan !== 'free_trial' && user.role !== 'admin' && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border-2 border-emerald-500/40 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+              <Sparkles className="w-5 h-5 text-emerald-500" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span>{lang === 'bn' ? '🎁 নতুন ইউজার স্পেশাল: ১ মাস সম্পূর্ণ ফ্রি হোস্টিং!' : '🎁 New User Special: 1 Month Free Hosting!'}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500 text-slate-950 uppercase tracking-wider">
+                  {lang === 'bn' ? 'ফ্রি প্ল্যান' : 'Free Trial'}
+                </span>
+              </h4>
+              <p className="text-xs text-slate-700 dark:text-slate-300 font-medium mt-1 leading-relaxed">
+                {lang === 'bn'
+                  ? 'নতুন ইউজার হিসেবে আপনি ৩০ দিনের জন্য ১টি টেলিগ্রাম বট ২৪/৭ লাইভ হোস্ট করতে পারবেন একদম বিনামূল্যে।'
+                  : 'As a new user, you can host 1 Telegram bot 24/7 live for 30 days completely free!'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClaimFreeTrial || onOpenPlans}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/30 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105"
+          >
+            <Zap className="w-4 h-4" />
+            <span>{lang === 'bn' ? '⚡ ১ মাসের ফ্রি প্ল্যান নিন' : '⚡ Claim 1 Month Free'}</span>
+          </button>
         </div>
       )}
 

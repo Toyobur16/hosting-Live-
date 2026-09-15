@@ -84,7 +84,20 @@ export interface AuthUser {
   avatar?: string;
   isVerified?: boolean;
   verificationToken?: string;
+  hasClaimedFreeTrial?: boolean;
+  hasClaimedFreePlan?: boolean;
+  freeTrialClaimedAt?: string;
   createdAt: string;
+}
+
+export interface FreeTrialSettings {
+  enabled: boolean;
+  durationDays: number;
+  maxBots: number;
+  titleBn?: string;
+  titleEn?: string;
+  descriptionBn?: string;
+  descriptionEn?: string;
 }
 
 export interface HostingPlan {
@@ -96,6 +109,7 @@ export interface HostingPlan {
   priceBdt: number;
   priceUsd: number;
   popular?: boolean;
+  isFreeTrial?: boolean;
   featuresBn: string[];
   featuresEn: string[];
 }
@@ -176,21 +190,27 @@ export interface HostedBot {
   id: string;
   name: string;
   entryFile: string;
+  owner?: string;
   ownerId?: string;
   ownerName?: string;
+  ownerEmail?: string;
+  dirName?: string;
   token?: string;
   botUsername?: string;
   status: 'running' | 'stopped' | 'starting' | 'error';
   pid: number | null;
-  uptimeSeconds: number;
-  startTime: string | null;
-  createdAt: string;
+  uptimeSeconds?: number;
+  uptime?: string;
+  startTime?: string | null;
+  createdAt?: string;
+  created?: string;
   autoRestart: boolean;
   fileCount?: number;
   error?: string;
   env?: Record<string, string>;
   currentVersion?: string;
   deploymentCount?: number;
+  lastPing?: string;
 }
 
 export interface DeploymentRecord {

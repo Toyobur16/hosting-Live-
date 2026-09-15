@@ -12,6 +12,8 @@ import {
   getUserNotifications,
   markNotificationAsRead,
   addBroadcastNotification,
+  getStoredNotifications,
+  saveStoredNotifications,
   getSmtpConfig,
   verifySmtpConnection,
   sendTestEmail,
@@ -51,6 +53,7 @@ const STORE_UPLOADS_DIR = path.join(HOSTED_BOTS_DIR, 'store_uploads');
 const STORE_THUMBNAILS_DIR = path.join(HOSTED_BOTS_DIR, 'store_thumbnails');
 const ANNOUNCEMENTS_FILE = path.join(HOSTED_BOTS_DIR, 'announcements.json');
 const SITE_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'site_settings.json');
+const FREE_TRIAL_SETTINGS_FILE = path.join(HOSTED_BOTS_DIR, 'free_trial_settings.json');
 
 // Ensure base directories and persistence files exist
 if (!fs.existsSync(HOSTED_BOTS_DIR)) {
@@ -346,6 +349,46 @@ if (!fs.existsSync(SUPPORT_MESSAGES_FILE)) {
 }
 if (!fs.existsSync(WISHLIST_FILE)) {
   fs.writeFileSync(WISHLIST_FILE, JSON.stringify({}, null, 2), 'utf-8');
+}
+
+const DEFAULT_FREE_TRIAL_SETTINGS = {
+  enabled: true,
+  durationDays: 30,
+  maxBots: 1,
+  nameBn: '১ মাস ফ্রি ট্রায়াল (নতুন ইউজার স্পেশাল)',
+  nameEn: '1 Month Free Trial (New User Special)',
+  featuresBn: [
+    '১টি টেলিগ্রাম বট ২৪/৭ সার্বক্ষণিক লাইভ হোস্টিং',
+    '১ মাস (৩০ দিন) সম্পূর্ণ ফ্রি লাইভ অ্যাক্সেস',
+    'অটো-রিস্টার্ট ও ক্র্যাশ প্রোটেকশন ওয়াচডগ',
+    'লাইভ কনসোল ও রিয়েল-টাইম লগস',
+    'ফাইল এডিটর ও ডাটাবেজ ব্যাকআপ'
+  ],
+  featuresEn: [
+    '1 Telegram Bot 24/7 Live Hosting',
+    '1 Month (30 Days) Completely Free Live Access',
+    'Auto-Restart & Crash Protection Watchdog',
+    'Live Console & Real-time Logs',
+    'File Editor & Database Backup'
+  ]
+};
+
+function getFreeTrialSettings() {
+  try {
+    if (fs.existsSync(FREE_TRIAL_SETTINGS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(FREE_TRIAL_SETTINGS_FILE, 'utf-8'));
+      return { ...DEFAULT_FREE_TRIAL_SETTINGS, ...data };
+    }
+  } catch {}
+  return DEFAULT_FREE_TRIAL_SETTINGS;
+}
+
+function saveFreeTrialSettings(data: any) {
+  fs.writeFileSync(FREE_TRIAL_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+if (!fs.existsSync(FREE_TRIAL_SETTINGS_FILE)) {
+  saveFreeTrialSettings(DEFAULT_FREE_TRIAL_SETTINGS);
 }
 
 // In-memory process and log store
@@ -772,17 +815,22 @@ function enrichUserWithPlanAndRole(user: any): any {
     user.maxBots = 999;
     user.plan = user.plan || 'admin_unlimited';
   } else {
-    // Normal user: ensure at least free plan with 1 bot
-    if (!user.plan || user.plan === 'none' || user.plan === 'free') {
-      user.plan = 'free';
-      user.maxBots = Math.max(user.maxBots || 0, 1);
-      changed = true;
-    }
-
-    if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
+    // Normal user:
+    if (user.plan === 'free_trial') {
+      if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
+        user.plan = 'expired';
+        user.maxBots = 0;
+        changed = true;
+      } else {
+        user.maxBots = Math.max(user.maxBots || 0, 1);
+      }
+    } else if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
       user.plan = 'expired';
-      user.maxBots = 1; // Grace fallback to 1 free bot
+      user.maxBots = 0;
       changed = true;
+    } else if (!user.plan || user.plan === 'none' || user.plan === 'free') {
+      user.plan = 'free';
+      user.maxBots = user.maxBots || 0;
     }
   }
 
@@ -1117,7 +1165,7 @@ setInterval(() => {
     // Plan Expiry Enforcement: If owner's plan is expired or inactive, IMMEDIATELY halt live running bot
     if (owner && owner.role !== 'admin') {
       const isExpired = Boolean(owner.planExpiresAt && owner.planExpiresAt < Date.now());
-      const hasNoActivePlan = !owner.plan || owner.plan === 'none' || owner.plan === 'expired';
+      const hasNoActivePlan = !owner.plan || owner.plan === 'none' || owner.plan === 'expired' || owner.plan === 'free';
 
       if (isExpired || hasNoActivePlan) {
         if (runningProcesses.has(bot.id) || bot.status === 'running' || bot.autoRestart) {
@@ -1126,7 +1174,7 @@ setInterval(() => {
           bot.autoRestart = false;
           bot.status = 'stopped';
           bot.pid = null;
-          appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার সাবস্ক্রিপশন প্যাকেজের মেয়াদ শেষ হয়ে গেছে। ফলে বটটি লাইভ থাকা বন্ধ করা হয়েছে। পুনরায় লাইভ করতে দয়া করে প্যাকেজ রিনিউ করুন।');
+          appendLog(bot.id, 'warn', '⚠️ [প্ল্যান বন্ধ] আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!');
           registryChanged = true;
         }
         continue;
@@ -1468,7 +1516,166 @@ app.post('/api/auth/google', (req, res) => {
 
 // Hosting Plans & Payment Endpoints
 app.get('/api/plans', (req, res) => {
-  res.json({ plans: getPlans() });
+  const allPlans = getPlans();
+  const user = getAuthUser(req);
+  const userClaimed = Boolean(user && (user.hasClaimedFreePlan || user.hasClaimedFreeTrial));
+
+  // If user has already claimed the 1-month free plan and is not admin, hide the free trial plan from their view
+  if (user && userClaimed && !isUserAdmin(user)) {
+    return res.json({
+      plans: allPlans.filter((p: any) => !p.isFreeTrial && p.id !== 'free_trial_1m'),
+      userClaimedFreePlan: true,
+      freeTrial: getFreeTrialSettings()
+    });
+  }
+
+  res.json({
+    plans: allPlans,
+    userClaimedFreePlan: userClaimed,
+    freeTrial: getFreeTrialSettings()
+  });
+});
+
+app.get('/api/admin/plans', (req, res) => {
+  const admin = getAuthUser(req);
+  if (!isUserAdmin(admin)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  res.json({ plans: getPlans(), freeTrial: getFreeTrialSettings() });
+});
+
+app.get('/api/free-trial/settings', (req, res) => {
+  res.json({ success: true, settings: getFreeTrialSettings() });
+});
+
+const handleClaimFreeTrialEndpoint = (req: express.Request, res: express.Response) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'ফ্রি প্ল্যান ক্লেইম করতে প্রথমে লগইন করুন (Please login to claim free trial)' });
+  }
+
+  const settings = getFreeTrialSettings();
+  if (settings && settings.enabled === false) {
+    return res.status(400).json({ error: 'বর্তমানে ফ্রি ট্রায়াল অফারটি সাময়িকভাবে বন্ধ রয়েছে।' });
+  }
+
+  const accounts = getAccounts();
+  const targetUser = accounts.find((a) => a.id === user.id);
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+  if (targetUser.hasClaimedFreeTrial || targetUser.hasClaimedFreePlan) {
+    return res.status(400).json({
+      error: 'আপনি ইতোমধ্যে ১ মাসের ফ্রি প্ল্যান ব্যবহার করেছেন। এটি প্রতি ইউজারের জন্য শুধুমাত্র একবার প্রযোজ্য।',
+      alreadyClaimed: true
+    });
+  }
+
+  const durationDays = Number(settings?.durationDays) || 30;
+  targetUser.hasClaimedFreeTrial = true;
+  targetUser.hasClaimedFreePlan = true;
+  targetUser.freeTrialClaimedAt = new Date().toISOString();
+  targetUser.plan = 'free_trial_1m';
+  targetUser.maxBots = Math.max(targetUser.maxBots || 0, Number(settings?.maxBots) || 1);
+  const currentExpiry = (targetUser.planExpiresAt && targetUser.planExpiresAt > Date.now()) ? targetUser.planExpiresAt : Date.now();
+  targetUser.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+  saveAccounts(accounts);
+
+  // In-app notification
+  try {
+    const notifications = getStoredNotifications();
+    notifications.unshift({
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId: targetUser.id,
+      type: 'plan_purchased',
+      title: '🎉 ১ মাসের ফ্রি ট্রায়াল প্ল্যান সক্রিয় হয়েছে!',
+      message: `অভিনন্দন! আপনি ১ মাসের (${durationDays} দিন) জন্য ১টি টেলিগ্রাম বট ফ্রি হোস্টিং সুবিধা পেয়েছেন। মেয়াদ: ${new Date(targetUser.planExpiresAt).toLocaleDateString('bn-BD')} পর্যন্ত।`,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+    saveStoredNotifications(notifications);
+  } catch {}
+
+  const enriched = enrichUserWithPlanAndRole(targetUser);
+  res.json({
+    success: true,
+    message: '🎉 অভিনন্দন! ১ মাসের ফ্রি ট্রায়াল প্ল্যান সফলভাবে সক্রিয় হয়েছে। এখন আপনি ১টি টেলিগ্রাম বট লাইভ হোস্ট করতে পারবেন।',
+    user: enriched
+  });
+};
+
+app.post('/api/free-trial/claim', handleClaimFreeTrialEndpoint);
+app.post('/api/plans/claim-free-trial', handleClaimFreeTrialEndpoint);
+
+app.post('/api/admin/free-trial/settings', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { enabled, durationDays, maxBots, nameBn, nameEn, featuresBn, featuresEn } = req.body;
+  const current = getFreeTrialSettings();
+  const updated = {
+    ...current,
+    enabled: typeof enabled === 'boolean' ? enabled : current.enabled,
+    durationDays: Number(durationDays) || current.durationDays,
+    maxBots: Number(maxBots) || current.maxBots,
+    nameBn: nameBn || current.nameBn,
+    nameEn: nameEn || current.nameEn,
+    featuresBn: Array.isArray(featuresBn) ? featuresBn : current.featuresBn,
+    featuresEn: Array.isArray(featuresEn) ? featuresEn : current.featuresEn
+  };
+  saveFreeTrialSettings(updated);
+  res.json({ success: true, settings: updated });
+});
+
+app.post('/api/admin/free-trial/reset-user', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { userId } = req.body;
+  const accounts = getAccounts();
+  const target = accounts.find((a) => a.id === userId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  target.hasClaimedFreeTrial = false;
+  delete target.freeTrialClaimedAt;
+  saveAccounts(accounts);
+
+  res.json({
+    success: true,
+    message: 'ইউজারের ফ্রি ট্রায়াল স্ট্যাটাস রিসেট করা হয়েছে। ইউজার আবার ১ মাসের ফ্রি ট্রায়াল নিতে পারবে।',
+    user: enrichUserWithPlanAndRole(target)
+  });
+});
+
+app.post('/api/admin/free-trial/grant-user', (req, res) => {
+  const user = getAuthUser(req);
+  if (!isUserAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { userId } = req.body;
+  const accounts = getAccounts();
+  const target = accounts.find((a) => a.id === userId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const settings = getFreeTrialSettings();
+  const durationDays = Number(settings.durationDays) || 30;
+  target.hasClaimedFreeTrial = true;
+  target.freeTrialClaimedAt = new Date().toISOString();
+  target.plan = 'free_trial';
+  target.maxBots = Number(settings.maxBots) || 1;
+  const currentExpiry = (target.planExpiresAt && target.planExpiresAt > Date.now()) ? target.planExpiresAt : Date.now();
+  target.planExpiresAt = currentExpiry + durationDays * 24 * 60 * 60 * 1000;
+  saveAccounts(accounts);
+
+  res.json({
+    success: true,
+    message: 'ইউজারকে ১ মাসের ফ্রি প্ল্যান প্রদান করা হয়েছে।',
+    user: enrichUserWithPlanAndRole(target)
+  });
 });
 
 app.get('/api/payment-settings', (req, res) => {
@@ -3255,13 +3462,15 @@ app.post('/api/bots/:id/restart', (req, res) => {
   if (user && user.role !== 'admin') {
     if (user.planExpiresAt && user.planExpiresAt < Date.now()) {
       return res.status(403).json({
-        error: 'আপনার প্যাকেজের মেয়াদ শেষ হয়ে গেছে। বট পুনরায় চালু করতে দয়া করে প্যাকেজ রিনিউ করুন।',
+        error: 'আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!',
         planExpired: true
       });
     }
-    if (!user.plan || user.plan === 'none' || user.plan === 'expired') {
+    if (!user.plan || user.plan === 'none' || user.plan === 'expired' || user.plan === 'free') {
       return res.status(403).json({
-        error: 'বট লাইভ রাখতে একটি সক্রিয় প্যাকেজ প্রয়োজন। দয়া করে প্যাকেজ কিনুন।',
+        error: user.hasClaimedFreeTrial
+          ? 'আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!'
+          : 'বট লাইভ রাখতে ১ মাসের ফ্রি প্ল্যান ক্লেইম করুন অথবা একটি প্যাকেজ কিনুন।',
         planRequired: true
       });
     }
@@ -4408,7 +4617,7 @@ setInterval(async () => {
           bot.autoRestart = false;
           bot.status = 'stopped';
           bot.pid = null;
-          appendLog(bot.id, 'warn', '⚠️ [PLAN EXPIRED] আপনার সাবস্ক্রিপশন প্যাকেজের মেয়াদ শেষ হয়েছে। ফলে বটটি সম্পূর্ণ বন্ধ করা হলো। দয়া করে প্ল্যান রিনিউ করুন।');
+          appendLog(bot.id, 'warn', '⚠️ [প্ল্যান বন্ধ] আপনার ফ্রি প্লানটি বন্ধ হয়ে গেছে। একটি প্ল্যান কিনুন, আপনার আগের বট সাথে সাথে লাইভ হয়ে যাবে!');
           regUpdated = true;
         }
       }
@@ -4432,6 +4641,11 @@ app.get(['/admin', '/admin/login'], (req, res) => {
 
 // Vite middleware / Static Serving
 async function start() {
+  const publicPath = path.join(process.cwd(), 'public');
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+
   const isProd = process.env.NODE_ENV === 'production' || process.argv[1]?.includes('dist') || !fs.existsSync(path.join(process.cwd(), 'src', 'main.tsx'));
   if (!isProd) {
     const vite = await createViteServer({
