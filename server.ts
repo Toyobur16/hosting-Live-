@@ -1197,7 +1197,7 @@ setInterval(() => {
 
 // API ROUTES
 
-app.get('/api/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     status: 'ok',
     bots: getRegistry().length,
