@@ -18,7 +18,7 @@ import {
   Moon,
   Languages
 } from 'lucide-react';
-import { AuthUser } from '../types';
+import { AuthUser, SiteSettings } from '../types';
 
 interface SidebarDrawerProps {
   isOpen: boolean;
@@ -37,6 +37,7 @@ interface SidebarDrawerProps {
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
   onToggleLang?: () => void;
+  siteSettings?: SiteSettings;
 }
 
 export function SidebarDrawer({
@@ -55,7 +56,8 @@ export function SidebarDrawer({
   botsCount = 0,
   theme,
   onToggleTheme,
-  onToggleLang
+  onToggleLang,
+  siteSettings
 }: SidebarDrawerProps) {
   if (!isOpen) return null;
 
@@ -117,9 +119,9 @@ export function SidebarDrawer({
     },
     {
       id: 'support',
-      label: lang === 'bn' ? 'সাপোর্ট সেন্টার' : 'Support Center',
+      label: lang === 'bn' ? 'সাপোর্ট ও FAQ গাইড' : 'Support & FAQ Guide',
       icon: Headphones,
-      badge: '24/7',
+      badge: 'FAQ',
       color: 'indigo'
     },
     {
@@ -143,6 +145,37 @@ export function SidebarDrawer({
         <div className="w-screen max-w-xs sm:max-w-sm bg-white dark:bg-[#0a0f1d] border-l border-slate-200 dark:border-[#162035] shadow-2xl flex flex-col justify-between overflow-y-auto transition-colors">
           {/* Top Section */}
           <div>
+            {/* Top Brand Banner */}
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-[#070b14] border-b border-slate-200 dark:border-[#162035] flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 shrink-0 flex items-center justify-center shadow-xs">
+                  <img
+                    src={siteSettings?.logoUrl || '/logo-icon.png'}
+                    alt="Logo"
+                    className="w-full h-full object-contain p-0.5"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                    {siteSettings?.siteName || 'FAKIR BD TOP UP'}
+                  </span>
+                  <span className="text-[9px] font-bold text-amber-500 dark:text-amber-400 truncate">
+                    {lang === 'bn'
+                      ? (siteSettings?.taglineBn || '২৪/৭ ক্লাউড বট ও টপ আপ')
+                      : (siteSettings?.taglineEn || '24/7 Cloud Bot & Top Up')}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#162035] transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Header: User card with close button */}
             <div className="p-5 border-b border-slate-200 dark:border-[#162035] flex items-center justify-between">
               {user ? (

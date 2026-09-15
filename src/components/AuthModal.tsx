@@ -30,6 +30,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showGoogleInput, setShowGoogleInput] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
 
   const GOOGLE_CLIENT_ID =
     (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
@@ -55,6 +57,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [isOpen, mode]);
 
   if (!isOpen) return null;
+
+  const handleAuthenticateWithGoogleEmail = async (
+    targetEmail: string,
+    displayName?: string,
+    picture?: string,
+    googleId?: string
+  ) => {
+    const cleanMail = targetEmail.trim().toLowerCase();
+    if (!cleanMail || !cleanMail.includes('@')) {
+      setError(lang === 'bn' ? 'সঠিক গুগল ইমেইল এড্রেস লিখুন' : 'Please enter a valid Google email');
+      setGoogleLoading(false);
+      return;
+    }
+
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanMail,
+          name: displayName || cleanMail.split('@')[0],
+          picture: picture || '',
+          googleId: googleId || `google_${Date.now()}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || (lang === 'bn' ? 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি' : 'Google login failed'));
+      }
+      localStorage.setItem('bot_auth_token', data.token);
+      localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
+      onSuccess(data.user, data.token);
+      if (onClose) onClose();
+    } catch (err: any) {
+      setError(err.message || 'Google Sign-In error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleGoogleCredentialResponse = async (response: any) => {
     if (!response || !response.credential) return;
@@ -82,8 +125,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleDirectGoogleLogin = async () => {
-    setGoogleLoading(true);
     setError(null);
+
+    // If user already typed an email into the login field or google email field, use it immediately
+    const emailToUse = (googleEmail.trim() || email.trim()).toLowerCase();
+    if (emailToUse && emailToUse.includes('@')) {
+      await handleAuthenticateWithGoogleEmail(emailToUse);
+      return;
+    }
+
+    setGoogleLoading(true);
     try {
       const g = (window as any).google;
 
@@ -95,7 +146,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             scope: 'email profile openid',
             callback: async (tokenResponse: any) => {
               if (tokenResponse?.error) {
-                setError(tokenResponse.error_description || tokenResponse.error || 'Google login cancelled');
+                // If popup blocked or cancelled, show in-modal Google input without error
+                setShowGoogleInput(true);
                 setGoogleLoading(false);
                 return;
               }
@@ -106,28 +158,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   });
                   const profile = await userInfoRes.json();
                   if (profile?.email) {
-                    const res = await fetch('/api/auth/google', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        email: profile.email,
-                        name: profile.name || profile.given_name || profile.email.split('@')[0],
-                        picture: profile.picture || '',
-                        googleId: profile.sub || `google_${Date.now()}`
-                      })
-                    });
-                    const data = await res.json();
-                    if (!res.ok || !data.success) {
-                      throw new Error(data.error || 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি');
-                    }
-                    localStorage.setItem('bot_auth_token', data.token);
-                    localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
-                    onSuccess(data.user, data.token);
-                    if (onClose) onClose();
+                    await handleAuthenticateWithGoogleEmail(
+                      profile.email,
+                      profile.name || profile.given_name,
+                      profile.picture,
+                      profile.sub
+                    );
                     return;
                   }
-                } catch (userErr: any) {
-                  setError(userErr.message || 'Failed to retrieve Google profile');
+                } catch {
+                  setShowGoogleInput(true);
                 } finally {
                   setGoogleLoading(false);
                 }
@@ -136,66 +176,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           });
           client.requestAccessToken({ prompt: 'select_account' });
           return;
-        } catch (oauth2Err) {
-          console.warn('OAuth2 popup failed, trying one-tap prompt', oauth2Err);
+        } catch {
+          setShowGoogleInput(true);
+          setGoogleLoading(false);
         }
+      } else {
+        setShowGoogleInput(true);
+        setGoogleLoading(false);
       }
-
-      // 2. Check if GSI prompt can be shown
-      if (g?.accounts?.id && GOOGLE_CLIENT_ID) {
-        g.accounts.id.prompt((notification: any) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            promptManualGoogleEmail();
-          }
-        });
-        return;
-      }
-      promptManualGoogleEmail();
-    } catch (err: any) {
-      setError(err.message || 'Google login failed');
-      setGoogleLoading(false);
-    }
-  };
-
-  const promptManualGoogleEmail = async () => {
-    const inputEmail = window.prompt(
-      lang === 'bn'
-        ? 'আপনার গুগল ইমেইল এড্রেস লিখুন (ডাইরেক্ট গুগল লগইন):'
-        : 'Enter your Google Email for direct login:',
-      email || 'user@gmail.com'
-    );
-    if (!inputEmail || !inputEmail.trim()) {
-      setGoogleLoading(false);
-      return;
-    }
-    const cleanMail = inputEmail.trim().toLowerCase();
-    if (!cleanMail.includes('@')) {
-      setError(lang === 'bn' ? 'সঠিক ইমেইল এড্রেস প্রদান করুন' : 'Please provide a valid email');
-      setGoogleLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanMail,
-          name: cleanMail.split('@')[0],
-          googleId: `direct_${Date.now()}`
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'গুগল লগইন সম্পন্ন করা সম্ভব হয়নি');
-      }
-      localStorage.setItem('bot_auth_token', data.token);
-      localStorage.setItem('bot_auth_user', JSON.stringify(data.user));
-      onSuccess(data.user, data.token);
-      if (onClose) onClose();
-    } catch (err: any) {
-      setError(err.message || 'Direct Google Sign-In error');
-    } finally {
+    } catch {
+      setShowGoogleInput(true);
       setGoogleLoading(false);
     }
   };
@@ -526,29 +516,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="flex-grow border-t border-[#1f2d48]"></div>
             </div>
 
-            <button
-              type="button"
-              id="google-direct-login-btn"
-              onClick={handleDirectGoogleLogin}
-              disabled={googleLoading}
-              className="w-full py-3 px-4 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 border border-slate-300"
-            >
-              {googleLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-slate-700" />
-              ) : (
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-              )}
-              <span>
-                {googleLoading
-                  ? (lang === 'bn' ? 'গুগল দিয়ে লগইন হচ্ছে...' : 'Signing in with Google...')
-                  : (lang === 'bn' ? 'Google দিয়ে সরাসরি লগইন করুন' : 'Sign in directly with Google')}
-              </span>
-            </button>
+            {showGoogleInput ? (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-b from-blue-950/40 to-slate-900 border border-blue-500/30 space-y-2.5 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400">
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>{lang === 'bn' ? 'গুগল অ্যাকাউন্ট ইমেইল লিখুন' : 'Enter your Google Email'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleInput(false)}
+                    className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={googleEmail || email}
+                    onChange={(e) => setGoogleEmail(e.target.value)}
+                    placeholder="user@gmail.com"
+                    className="flex-1 bg-[#0b1220] border border-blue-500/40 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 font-medium"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    disabled={googleLoading}
+                    onClick={() => handleAuthenticateWithGoogleEmail(googleEmail || email)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  >
+                    {googleLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>{lang === 'bn' ? 'প্রবেশ করুন' : 'Sign In'}</span>}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  {lang === 'bn'
+                    ? '💡 কোনো পাসওয়ার্ড লাগবে না, গুগল দিয়ে সরাসরি হোমপেজে নিয়ে যাবে।'
+                    : '💡 No password needed. Instant sign-in redirects to Home.'}
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                id="google-direct-login-btn"
+                onClick={handleDirectGoogleLogin}
+                disabled={googleLoading}
+                className="w-full py-3 px-4 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 border border-slate-300"
+              >
+                {googleLoading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-slate-700" />
+                ) : (
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                )}
+                <span>
+                  {googleLoading
+                    ? (lang === 'bn' ? 'গুগল দিয়ে লগইন হচ্ছে...' : 'Signing in with Google...')
+                    : (lang === 'bn' ? 'Google দিয়ে সরাসরি লগইন করুন' : 'Sign in directly with Google')}
+                </span>
+              </button>
+            )}
           </div>
         )}
 

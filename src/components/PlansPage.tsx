@@ -5,6 +5,7 @@ import {
   CreditCard, ChevronRight, ShoppingCart, X, AlertTriangle
 } from 'lucide-react';
 import { HostingPlan, AuthUser } from '../types';
+import { FAQAccordion } from './FAQAccordion';
 
 interface PlansPageProps {
   user: AuthUser | null;
@@ -12,6 +13,8 @@ interface PlansPageProps {
   onNavigateToWallet: () => void;
   onPlanActivated: (updatedUser: AuthUser) => void;
   lang: 'bn' | 'en';
+  onNavigateToDeploy?: () => void;
+  onNavigateToSupport?: () => void;
 }
 
 export const PlansPage: React.FC<PlansPageProps> = ({
@@ -19,7 +22,9 @@ export const PlansPage: React.FC<PlansPageProps> = ({
   onOpenAuthModal,
   onNavigateToWallet,
   onPlanActivated,
-  lang
+  lang,
+  onNavigateToDeploy,
+  onNavigateToSupport
 }) => {
   const [plans, setPlans] = useState<HostingPlan[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,12 +39,27 @@ export const PlansPage: React.FC<PlansPageProps> = ({
 
   useEffect(() => {
     fetchPlans();
+
+    const handlePlansUpdated = () => {
+      fetchPlans();
+    };
+
+    window.addEventListener('plans-updated', handlePlansUpdated);
+    window.addEventListener('focus', handlePlansUpdated);
+
+    return () => {
+      window.removeEventListener('plans-updated', handlePlansUpdated);
+      window.removeEventListener('focus', handlePlansUpdated);
+    };
   }, []);
 
   const fetchPlans = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/plans');
+      const res = await fetch(`/api/plans?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const data = await res.json();
       if (data.plans && Array.isArray(data.plans)) {
         const orderMap: Record<string, number> = {
@@ -136,6 +156,16 @@ export const PlansPage: React.FC<PlansPageProps> = ({
                 <Crown className="w-3.5 h-3.5" />
                 <span>{lang === 'bn' ? 'হোস্টিং প্লান ও প্যাকেজ' : 'Hosting Packages'}</span>
               </span>
+              <button
+                type="button"
+                onClick={() => fetchPlans()}
+                disabled={loading}
+                title={lang === 'bn' ? 'প্লান তালিকা রিফ্রেশ করুন' : 'Refresh Plans'}
+                className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-slate-300 hover:text-white text-xs flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
+                <span>{loading ? (lang === 'bn' ? 'লোড হচ্ছে...' : 'Loading...') : (lang === 'bn' ? 'রিফ্রেশ' : 'Refresh')}</span>
+              </button>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               {lang === 'bn' ? '১ মাস থেকে ১ বছর মেয়াদি ক্লাউড হোস্টিং' : 'Cloud Hosting Plans (1 Month to 1 Year)'}
@@ -320,6 +350,16 @@ export const PlansPage: React.FC<PlansPageProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* Accordion FAQ Section for Hosting Plans & Deployment */}
+      <div className="pt-6">
+        <FAQAccordion
+          lang={lang}
+          onNavigateToDeploy={onNavigateToDeploy}
+          onNavigateToSupport={onNavigateToSupport}
+          defaultOpenFirst={false}
+        />
       </div>
 
       {/* Confirmation Modal */}

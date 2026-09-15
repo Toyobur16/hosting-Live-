@@ -1,6 +1,6 @@
 import React from 'react';
 import { Terminal, Settings, Globe, Plus, LogOut, User, CheckCircle2, Moon, Sun, ShieldCheck, Crown, ShieldAlert, Wallet } from 'lucide-react';
-import { HostedBot, AuthUser } from '../types';
+import { HostedBot, AuthUser, SiteSettings } from '../types';
 
 interface HeaderProps {
   bots: HostedBot[];
@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenAuthModal: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  siteSettings?: SiteSettings;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,7 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onOpenAuthModal,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  siteSettings
 }) => {
   const runningCount = bots.filter((b) => b.status === 'running').length;
   const isAdmin = Boolean(
@@ -63,15 +65,23 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
         {/* Branding */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#0088cc] flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-[#0088cc]/20">
-            <Terminal className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-2xl overflow-hidden bg-slate-900 border border-amber-500/40 flex items-center justify-center shadow-sm shadow-amber-500/10 shrink-0">
+            <img
+              src={siteSettings?.logoUrl || '/logo-icon.png'}
+              alt={siteSettings?.siteName || 'Logo'}
+              className="w-full h-full object-contain p-0.5"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#1e293b] dark:text-white flex items-center gap-1.5">
-                Bot-Host
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#0088cc]/10 dark:bg-[#0088cc]/20 text-[#0088cc] border border-[#0088cc]/20 font-semibold">
-                  Cloud
+                {siteSettings?.siteName || 'FAKIR BD TOP UP'}
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold">
+                  TOP UP
                 </span>
                 <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-semibold">
                   ২৪/৭ লাইভ
@@ -80,8 +90,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <p className="text-xs text-[#64748b] dark:text-[#94a3b8]">
               {lang === 'bn'
-                ? 'সুরক্ষিত ও স্বাধীন টেলিগ্রাম বট ক্লাউড হোস্টিং'
-                : 'Isolated & Secure Telegram Bot Cloud Hosting'}
+                ? (siteSettings?.taglineBn || '২৪/৭ ক্লাউড বট ও টপ আপ সার্ভিস')
+                : (siteSettings?.taglineEn || '24/7 Cloud Bot & Top Up Service')}
             </p>
           </div>
         </div>

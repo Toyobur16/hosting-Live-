@@ -262,10 +262,10 @@ if (!fs.existsSync(PAYMENT_SETTINGS_FILE)) {
 }
 
 const DEFAULT_SITE_SETTINGS = {
-  siteName: 'hosting-Live Fast',
-  logoUrl: '',
-  taglineBn: '২৪/৭ ক্লাউড বট হোস্টিং',
-  taglineEn: '24/7 Cloud Bot & Web Hosting'
+  siteName: 'FAKIR BD TOP UP',
+  logoUrl: '/site-logo.png',
+  taglineBn: '২৪/৭ ক্লাউড বট ও টপ আপ সার্ভিস',
+  taglineEn: '24/7 Cloud Bot & Top Up Service'
 };
 
 if (!fs.existsSync(SITE_SETTINGS_FILE)) {
@@ -3996,7 +3996,7 @@ app.get(['/admin', '/admin/login'], (req, res) => {
 
 // Vite middleware / Static Serving
 async function start() {
-  const isProd = process.env.NODE_ENV === 'production' || !fs.existsSync(path.join(process.cwd(), 'src', 'main.tsx'));
+  const isProd = process.env.NODE_ENV === 'production' || process.argv[1]?.includes('dist') || !fs.existsSync(path.join(process.cwd(), 'src', 'main.tsx'));
   if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },

@@ -66,6 +66,15 @@ export const PlansModal: React.FC<PlansModalProps> = ({
         fetchUserStatus();
       }
     }
+
+    const handlePlansUpdated = () => {
+      fetchPlans();
+    };
+
+    window.addEventListener('plans-updated', handlePlansUpdated);
+    return () => {
+      window.removeEventListener('plans-updated', handlePlansUpdated);
+    };
   }, [isOpen, user]);
 
   useEffect(() => {
@@ -83,7 +92,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
 
   const fetchPlans = async () => {
     try {
-      const res = await fetch('/api/plans');
+      const res = await fetch(`/api/plans?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const data = await res.json();
       if (data.plans && Array.isArray(data.plans)) {
         // Sort plans in order: free -> 1_month -> 3_months -> 6_months -> 1_year -> custom
@@ -669,9 +681,10 @@ export const PlansModal: React.FC<PlansModalProps> = ({
                     <div className="relative">
                       <input
                         type="number"
-                        min={depositCurrency === 'USD' ? '1' : '50'}
-                        step={depositCurrency === 'USD' ? '0.5' : '10'}
+                        min={depositCurrency === 'USD' ? '0.1' : '10'}
+                        step="any"
                         value={depositAmount}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => setDepositAmount(e.target.value)}
                         placeholder={depositCurrency === 'USD' ? '5.00' : '150'}
                         className="w-full bg-[#090e18] border border-[#1f2d48] rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"

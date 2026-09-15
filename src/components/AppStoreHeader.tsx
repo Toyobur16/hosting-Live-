@@ -13,7 +13,7 @@ import {
   ShoppingBag,
   Headphones
 } from 'lucide-react';
-import { AuthUser } from '../types';
+import { AuthUser, SiteSettings } from '../types';
 
 interface AppStoreHeaderProps {
   user: AuthUser | null;
@@ -30,6 +30,7 @@ interface AppStoreHeaderProps {
   hasActivePlan: boolean;
   botsCount?: number;
   pendingCount?: number;
+  siteSettings?: SiteSettings;
 }
 
 export function AppStoreHeader({
@@ -46,7 +47,8 @@ export function AppStoreHeader({
   onDeployNewBot,
   hasActivePlan,
   botsCount = 0,
-  pendingCount = 0
+  pendingCount = 0,
+  siteSettings
 }: AppStoreHeaderProps) {
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
@@ -74,22 +76,32 @@ export function AppStoreHeader({
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#162035] transition-colors">
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 h-15 sm:h-16 flex items-center justify-between gap-1 sm:gap-3 w-full">
-        {/* Left Branding: hosting-Live Fast */}
+        {/* Left Branding: Site Logo & Name */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 min-w-0">
           <button
             type="button"
             onClick={() => onSelectTab('home')}
-            className="flex items-center gap-1.5 sm:gap-2.5 group cursor-pointer text-left focus:outline-hidden shrink-0"
+            className="flex items-center gap-2 sm:gap-3 group cursor-pointer text-left focus:outline-hidden shrink-0"
           >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-[#00d293] to-emerald-400 flex items-center justify-center shadow-md shadow-[#00d293]/20 group-hover:scale-105 transition-transform shrink-0">
-              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 stroke-[2.5]" />
+            <div className="h-9 sm:h-10 w-9 sm:w-10 rounded-xl overflow-hidden bg-slate-900 border border-amber-500/40 flex items-center justify-center shadow-md shadow-amber-500/10 group-hover:scale-105 transition-transform shrink-0">
+              <img
+                src={siteSettings?.logoUrl || '/logo-icon.png'}
+                alt={siteSettings?.siteName || 'Logo'}
+                className="w-full h-full object-contain p-0.5"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
-            <div className="flex flex-col min-w-0 max-w-[105px] xs:max-w-[150px] sm:max-w-none">
+            <div className="flex flex-col min-w-0 max-w-[125px] xs:max-w-[170px] sm:max-w-none">
               <span className="text-xs sm:text-base lg:text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1 truncate">
-                hosting-Live
+                {siteSettings?.siteName || 'FAKIR BD TOP UP'}
               </span>
-              <span className="hidden xs:inline text-[8px] sm:text-[10px] font-bold text-[#00a876] dark:text-[#00d293] tracking-wider uppercase truncate">
-                {lang === 'bn' ? '২৪/৭ ক্লাউড বট' : '24/7 Cloud Bot'}
+              <span className="hidden xs:inline text-[8px] sm:text-[10px] font-bold text-amber-500 dark:text-amber-400 tracking-wider uppercase truncate">
+                {lang === 'bn'
+                  ? (siteSettings?.taglineBn || '২৪/৭ ক্লাউড বট ও টপ আপ')
+                  : (siteSettings?.taglineEn || '24/7 Cloud Bot & Top Up')}
               </span>
             </div>
           </button>

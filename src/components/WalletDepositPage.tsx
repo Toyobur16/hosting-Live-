@@ -470,9 +470,10 @@ export const WalletDepositPage: React.FC<WalletDepositPageProps> = ({
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
                   <input
                     type="number"
-                    min="1"
-                    step="0.1"
+                    min="0.1"
+                    step="any"
                     value={depositAmount}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setDepositAmount(e.target.value)}
                     placeholder="e.g. 5.00"
                     className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0d1627] border border-slate-200 dark:border-[#1f2d48] text-sm font-bold text-slate-900 dark:text-white focus:outline-hidden focus:border-[#0088cc]"

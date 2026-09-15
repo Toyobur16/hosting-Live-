@@ -170,13 +170,21 @@ export function AdminStoreManager() {
 
     try {
       const token = localStorage.getItem('bot_auth_token');
+      const pUsd = parseFloat(String(editingItem.priceUsd)) || 0;
+      const pBdt = parseFloat(String(editingItem.priceBdt)) || Math.round(pUsd * 120);
+      const itemToSave = {
+        ...editingItem,
+        priceUsd: pUsd,
+        priceBdt: pBdt
+      };
+
       const res = await fetch('/api/admin/store-items', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(editingItem)
+        body: JSON.stringify(itemToSave)
       });
 
       const data = await res.json();
@@ -493,13 +501,19 @@ export function AdminStoreManager() {
                 </label>
                 <input
                   type="number"
-                  step="0.1"
+                  step="any"
                   min="0"
-                  value={editingItem.priceUsd || 0}
+                  value={editingItem.priceUsd ?? ''}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    setEditingItem({ ...editingItem, priceUsd: val, priceBdt: Math.round(val * 120) });
+                    const val = e.target.value;
+                    setEditingItem({
+                      ...editingItem,
+                      priceUsd: val as any,
+                      priceBdt: val === '' ? ('' as any) : Math.round((parseFloat(val) || 0) * 120)
+                    });
                   }}
+                  placeholder="0.00"
                   className="w-full px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs text-white focus:border-[#00d293] outline-none font-bold"
                 />
               </div>

@@ -8,22 +8,33 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
-  Clock,
-  ShieldCheck
+  HelpCircle,
+  Sparkles,
+  ChevronRight
 } from 'lucide-react';
 import { AuthUser, SupportSettings } from '../types';
+import { FAQAccordion } from './FAQAccordion';
 
 interface SupportCenterPageProps {
   user: AuthUser | null;
   onBack: () => void;
   onOpenAuthModal: () => void;
+  lang?: 'bn' | 'en';
+  onNavigateToDeploy?: () => void;
+  onNavigateToPlans?: () => void;
+  initialTab?: 'faq' | 'contact';
 }
 
 export function SupportCenterPage({
   user,
   onBack,
-  onOpenAuthModal
+  onOpenAuthModal,
+  lang = 'bn',
+  onNavigateToDeploy,
+  onNavigateToPlans,
+  initialTab = 'faq'
 }: SupportCenterPageProps) {
+  const [activeTab, setActiveTab] = useState<'faq' | 'contact'>(initialTab);
   const [settings, setSettings] = useState<SupportSettings>({
     email: 'toyoburrahman560@gmail.com',
     whatsapp: '01304104492',
@@ -59,7 +70,10 @@ export function SupportCenterPage({
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) {
-      setStatusMessage({ type: 'error', text: 'অনুগ্রহ করে আপনার সমস্যার বিবরণ লিখুন।' });
+      setStatusMessage({
+        type: 'error',
+        text: lang === 'bn' ? 'অনুগ্রহ করে আপনার সমস্যার বিবরণ লিখুন।' : 'Please describe your inquiry or issue.'
+      });
       return;
     }
 
@@ -83,13 +97,19 @@ export function SupportCenterPage({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setStatusMessage({ type: 'error', text: data.error || 'মেসেজ পাঠানো সম্ভব হয়নি।' });
+        setStatusMessage({
+          type: 'error',
+          text: data.error || (lang === 'bn' ? 'মেসেজ পাঠানো সম্ভব হয়নি।' : 'Failed to send message.')
+        });
         return;
       }
 
       setStatusMessage({
         type: 'success',
-        text: '🎉 আপনার মেসেজটি সফলভাবে সাপোর্ট টিমের কাছে পৌঁছেছে! আমরা খুব শীঘ্রই যোগাযোগ করব।'
+        text:
+          lang === 'bn'
+            ? '🎉 আপনার মেসেজটি সফলভাবে সাপোর্ট টিমের কাছে পৌঁছেছে! আমরা খুব শীঘ্রই যোগাযোগ করব।'
+            : '🎉 Your message has been sent to our support team! We will get back to you shortly.'
       });
       setSubject('');
       setMessage('');
@@ -101,201 +121,303 @@ export function SupportCenterPage({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-24 animate-in fade-in duration-200">
-      {/* Back Button matching Screenshot 5 */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-[#00d293] cursor-pointer transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back</span>
-      </button>
+    <div className="max-w-3xl mx-auto space-y-6 pb-24 animate-in fade-in duration-200">
+      {/* Top Navigation Row */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-500 cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>{lang === 'bn' ? 'পেছনে ফিরুন' : 'Back'}</span>
+        </button>
 
-      {/* Header matching Screenshot 5 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#00d293]/15 flex items-center justify-center text-[#00d293]">
-            <Headphones className="w-5 h-5 stroke-[2.5]" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">
-            Support Center
+        <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full font-bold">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>{settings.workingHours || (lang === 'bn' ? '২৪/৭ লাইভ সাপোর্ট' : '24/7 Live Support')}</span>
+        </div>
+      </div>
+
+      {/* Page Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+          <Headphones className="w-5 h-5 stroke-[2.5]" />
+        </div>
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+            {lang === 'bn' ? 'হেল্প ও সাপোর্ট সেন্টার' : 'Help & Support Center'}
           </h2>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-xs text-[#00d293] bg-[#00d293]/10 px-3 py-1 rounded-full font-bold">
-          <span className="w-2 h-2 rounded-full bg-[#00d293] animate-pulse"></span>
-          <span>{settings.workingHours || '24/7 Live'}</span>
-        </div>
-      </div>
-
-      {/* Contact Cards matching Screenshot 5: Email, WhatsApp, Telegram */}
-      <div className="space-y-3">
-        {/* Email Card matching Screenshot 5 */}
-        <div className="p-4 rounded-2xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-black text-white block">Email</span>
-              <span className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-xs block">
-                {settings.email || 'toyoburrahman560@gmail.com'}
-              </span>
-            </div>
-          </div>
-
-          <a
-            href={`mailto:${settings.email || 'toyoburrahman560@gmail.com'}?subject=Support%20Inquiry%20from%20App%20Store`}
-            className="px-4 py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-all hover:scale-102"
-          >
-            <span>Send</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        {/* WhatsApp Card matching Screenshot 5 */}
-        <div className="p-4 rounded-2xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <MessageSquare className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-black text-white block">WhatsApp</span>
-              <span className="text-xs text-slate-400">
-                {settings.whatsapp || '01304104492'}
-              </span>
-            </div>
-          </div>
-
-          <a
-            href={`https://wa.me/88${(settings.whatsapp || '01304104492').replace(/[^0-9]/g, '')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-all hover:scale-102"
-          >
-            <span>Chat</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        {/* Telegram Card matching Screenshot 5 */}
-        <div className="p-4 rounded-2xl bg-[#0f172a] border border-[#1e293b] flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
-              <Send className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-black text-white block">Telegram</span>
-              <span className="text-xs text-slate-400">Message us</span>
-            </div>
-          </div>
-
-          <a
-            href={`https://t.me/${(settings.telegram || 'toyoburrahman').replace('@', '')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-1.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-all hover:scale-102"
-          >
-            <span>Chat</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {lang === 'bn'
+              ? 'বট হোস্টিং ও ডিপ্লয়মেন্ট সম্পর্কে সচরাচর প্রশ্নোত্তর এবং সরাসরি যোগাযোগ'
+              : 'Answers to common questions regarding bot deployment and direct support channels'}
+          </p>
         </div>
       </div>
 
-      {/* Send a Message Card matching Screenshot 5 */}
-      <div className="p-6 rounded-3xl bg-[#0d1424] border border-[#1e2e42] shadow-xl space-y-4">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-[#00d293]" />
-          <h3 className="text-base font-black text-white">
-            Send a Message
-          </h3>
-        </div>
+      {/* Section Switcher Tabs */}
+      <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100 dark:bg-[#0c1424] border border-slate-200 dark:border-[#162035]">
+        <button
+          type="button"
+          onClick={() => setActiveTab('faq')}
+          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeTab === 'faq'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <HelpCircle className="w-4 h-4" />
+          <span>{lang === 'bn' ? 'সচরাচর প্রশ্ন (FAQ)' : 'FAQ & Guides'}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded-md uppercase font-bold hidden xs:inline ${
+              activeTab === 'faq' ? 'bg-slate-950/20 text-slate-950' : 'bg-amber-500/20 text-amber-500'
+            }`}
+          >
+            Guide
+          </span>
+        </button>
 
-        <form onSubmit={handleSendMessage} className="space-y-4">
-          {!user && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('contact')}
+          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeTab === 'contact'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>{lang === 'bn' ? 'সরাসরি সাপোর্ট ও মেসেজ' : 'Contact & Ticket'}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded-md uppercase font-bold hidden xs:inline ${
+              activeTab === 'contact' ? 'bg-slate-950/20 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+            }`}
+          >
+            Live
+          </span>
+        </button>
+      </div>
+
+      {/* 1. FAQ Accordion Tab */}
+      {activeTab === 'faq' && (
+        <div className="space-y-4">
+          <FAQAccordion
+            lang={lang}
+            onNavigateToDeploy={onNavigateToDeploy}
+            onNavigateToPlans={onNavigateToPlans}
+            onNavigateToSupport={() => setActiveTab('contact')}
+          />
+        </div>
+      )}
+
+      {/* 2. Direct Contact & Message Form Tab */}
+      {activeTab === 'contact' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Helpful Quick Banner to return to FAQ */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-slate-700 dark:text-slate-300 truncate">
+                {lang === 'bn'
+                  ? 'বট কিভাবে ডিপ্লয় ও রান করবেন তা জানতে দ্রুত FAQ দেখতে পারেন।'
+                  : 'Check our FAQ first for instant answers to deployment & plan questions.'}
+              </span>
+            </div>
+            <button
+              onClick={() => setActiveTab('faq')}
+              className="text-amber-500 font-bold hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
+            >
+              <span>{lang === 'bn' ? 'FAQ দেখুন' : 'View FAQ'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Contact Channels (Email, WhatsApp, Telegram) */}
+          <div className="space-y-3">
+            {/* Email Card */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-black text-slate-900 dark:text-white block">
+                    {lang === 'bn' ? 'ইমেইল সাপোর্ট' : 'Email Support'}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                    {settings.email || 'toyoburrahman560@gmail.com'}
+                  </span>
+                </div>
+              </div>
+
+              <a
+                href={`mailto:${settings.email || 'toyoburrahman560@gmail.com'}?subject=Support%20Inquiry`}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition shrink-0"
+              >
+                <span>{lang === 'bn' ? 'ইমেইল পাঠান' : 'Send'}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {/* WhatsApp Card */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-black text-slate-900 dark:text-white block">WhatsApp</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                    {settings.whatsapp || '01304104492'}
+                  </span>
+                </div>
+              </div>
+
+              <a
+                href={`https://wa.me/88${(settings.whatsapp || '01304104492').replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition shrink-0"
+              >
+                <span>{lang === 'bn' ? 'চ্যাট করুন' : 'Chat'}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {/* Telegram Card */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/15 text-sky-500 flex items-center justify-center shrink-0">
+                  <Send className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-black text-slate-900 dark:text-white block">Telegram</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                    @{settings.telegram || 'toyoburrahman'}
+                  </span>
+                </div>
+              </div>
+
+              <a
+                href={`https://t.me/${(settings.telegram || 'toyoburrahman').replace('@', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition shrink-0"
+              >
+                <span>{lang === 'bn' ? 'টেলিগ্রাম চ্যাট' : 'Chat'}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
+          {/* Direct Support Message Ticket Form */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-[#1e2e42] shadow-xl space-y-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-amber-500" />
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                {lang === 'bn' ? 'সাপোর্ট টিমের কাছে মেসেজ পাঠান' : 'Send a Message Ticket'}
+              </h3>
+            </div>
+
+            <form onSubmit={handleSendMessage} className="space-y-4">
+              {!user && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      {lang === 'bn' ? 'আপনার নাম (Your Name)' : 'Your Name'}
+                    </label>
+                    <input
+                      type="text"
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
+                      placeholder="e.g. Rahim"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] text-xs text-slate-900 dark:text-white focus:border-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      {lang === 'bn' ? 'আপনার ইমেইল (Your Email)' : 'Your Email'}
+                    </label>
+                    <input
+                      type="email"
+                      value={senderEmail}
+                      onChange={(e) => setSenderEmail(e.target.value)}
+                      placeholder="e.g. rahim@example.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] text-xs text-slate-900 dark:text-white focus:border-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  আপনার নাম (Your Name)
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {lang === 'bn' ? 'বিষয় / Subject *' : 'Subject *'}
                 </label>
                 <input
                   type="text"
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  placeholder="e.g. Rahim"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0f172a] border border-[#1e293b] text-xs text-white focus:border-[#00d293] focus:outline-hidden"
+                  required
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder={
+                    lang === 'bn'
+                      ? 'সমস্যার বিষয় (যেমন: বট ডিপ্লয় করতে পারছি না / প্ল্যান ইস্যু)'
+                      : 'What is your inquiry about?'
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-amber-500 focus:outline-hidden"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  আপনার ইমেইল (Your Email)
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {lang === 'bn' ? 'বিস্তারিত বিবরণ / Message *' : 'Message Details *'}
                 </label>
-                <input
-                  type="email"
-                  value={senderEmail}
-                  onChange={(e) => setSenderEmail(e.target.value)}
-                  placeholder="e.g. rahim@example.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#0f172a] border border-[#1e293b] text-xs text-white focus:border-[#00d293] focus:outline-hidden"
+                <textarea
+                  rows={4}
+                  required
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={
+                    lang === 'bn'
+                      ? 'আপনার সমস্যার বিবরণ বিস্তারিত লিখুন...'
+                      : 'Describe your issue or question in detail...'
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#1e293b] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-amber-500 focus:outline-hidden resize-none"
                 />
               </div>
-            </div>
-          )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              Subject *
-            </label>
-            <input
-              type="text"
-              required
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="What is the problem?"
-              className="w-full px-4 py-3 rounded-xl bg-[#0f172a] border border-[#1e293b] text-sm text-white placeholder:text-slate-500 focus:border-[#00d293] focus:outline-hidden"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              Message *
-            </label>
-            <textarea
-              rows={4}
-              required
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Describe your issue..."
-              className="w-full px-4 py-3 rounded-xl bg-[#0f172a] border border-[#1e293b] text-sm text-white placeholder:text-slate-500 focus:border-[#00d293] focus:outline-hidden resize-none"
-            />
-          </div>
-
-          {statusMessage && (
-            <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                statusMessage.type === 'success'
-                  ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'
-                  : 'bg-rose-950/60 border border-rose-800 text-rose-300'
-              }`}
-            >
-              {statusMessage.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              {statusMessage && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    statusMessage.type === 'success'
+                      ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'
+                      : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                  }`}
+                >
+                  {statusMessage.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{statusMessage.text}</span>
+                </div>
               )}
-              <span>{statusMessage.text}</span>
-            </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={sending}
-            className="w-full py-3.5 rounded-xl bg-[#00d293] hover:bg-[#00be84] text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#00d293]/20 transition-all hover:scale-101 active:scale-98 disabled:opacity-50"
-          >
-            <Send className="w-4 h-4" />
-            <span>{sending ? 'Sending...' : 'Send'}</span>
-          </button>
-        </form>
-      </div>
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 transition-all hover:scale-101 active:scale-98 disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                <span>
+                  {sending
+                    ? (lang === 'bn' ? 'পাঠানো হচ্ছে...' : 'Sending...')
+                    : (lang === 'bn' ? 'মেসেজ পাঠান' : 'Send Message')}
+                </span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

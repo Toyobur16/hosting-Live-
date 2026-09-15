@@ -4,7 +4,7 @@ import {
   RefreshCw, Bot, CreditCard, DollarSign, Settings, AlertTriangle,
   Play, Square, RotateCw, Trash2, Check, Copy, ExternalLink, ShieldAlert,
   Plus, Wallet, ArrowRight, Link, ShoppingBag, Sparkles, Folder, Headphones, BellRing,
-  Mail, ArrowUp, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, BarChart3, Layers
+  Mail, ArrowUp, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, BarChart3, Layers, Sliders
 } from 'lucide-react';
 import { PlanRequest, AuthUser, HostedBot, PaymentSettings, HostingPlan } from '../types';
 import { AdminBannersManager } from './admin/AdminBannersManager';
@@ -13,6 +13,7 @@ import { AdminNoticesManager } from './admin/AdminNoticesManager';
 import { AdminSmtpManager } from './admin/AdminSmtpManager';
 import { AdminStoreManager } from './admin/AdminStoreManager';
 import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
+import { AdminSiteSettingsManager } from './admin/AdminSiteSettingsManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -20,16 +21,18 @@ interface AdminPanelModalProps {
   currentUser: AuthUser | null;
   lang: 'bn' | 'en';
   onBotAction?: () => void;
+  onPlansUpdated?: () => void;
 }
 
-export type AdminTabType = 'requests' | 'users' | 'pricing' | 'store' | 'categories' | 'banners' | 'notices' | 'support' | 'payments' | 'bots' | 'smtp';
+export type AdminTabType = 'requests' | 'users' | 'pricing' | 'store' | 'categories' | 'banners' | 'notices' | 'support' | 'payments' | 'bots' | 'smtp' | 'site';
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   isOpen,
   onClose,
   currentUser,
   lang,
-  onBotAction
+  onBotAction,
+  onPlansUpdated
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTabType>('requests');
   const [loading, setLoading] = useState(false);
@@ -58,16 +61,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     instructionsEn: ''
   });
 
-  // Add Plan Form State
+  // Add Plan Form State (support string typing so zero can be deleted cleanly)
   const [showAddPlanForm, setShowAddPlanForm] = useState(false);
-  const [newPlanData, setNewPlanData] = useState({
+  const [newPlanData, setNewPlanData] = useState<{
+    id: string;
+    nameBn: string;
+    nameEn: string;
+    durationDays: string | number;
+    maxBots: string | number;
+    priceBdt: string | number;
+    priceUsd: string | number;
+    popular: boolean;
+    featuresBn: string;
+    featuresEn: string;
+  }>({
     id: '',
     nameBn: '',
     nameEn: '',
-    durationDays: 30,
-    maxBots: 3,
-    priceBdt: 200,
-    priceUsd: 2.0,
+    durationDays: '30',
+    maxBots: '3',
+    priceBdt: '240',
+    priceUsd: '2.0',
     popular: false,
     featuresBn: '২৪/৭ সার্বক্ষণিক লাইভ বট\nস্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট\nলাইভ কনসোল ও লগস',
     featuresEn: '24/7 Priority Bot Uptime\nAuto Crash Recovery\nLive Console & Logs'
@@ -272,17 +286,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setActionLoadingId('save_plans');
     const token = localStorage.getItem('bot_auth_token');
     try {
+      const sanitizedPlans = plans.map((p) => ({
+        ...p,
+        priceUsd: parseFloat(String(p.priceUsd)) || 0,
+        priceBdt: parseFloat(String(p.priceBdt)) || Math.round((parseFloat(String(p.priceUsd)) || 0) * 120),
+        maxBots: parseInt(String(p.maxBots), 10) || 1,
+        durationDays: parseInt(String(p.durationDays), 10) || 30
+      }));
+
       const res = await fetch('/api/admin/plans', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ plans })
+        body: JSON.stringify({ plans: sanitizedPlans })
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save plans');
-      setNotification({ type: 'success', message: 'প্লান ও প্রাইসিং সফলভাবে সংরক্ষিত হয়েছে!' });
+      setNotification({ type: 'success', message: 'প্লান ও প্রাইসিং সফলভাবে সংরক্ষিত ও সাইটে আপডেট হয়েছে!' });
+      loadAllAdminData();
+      window.dispatchEvent(new CustomEvent('plans-updated', { detail: sanitizedPlans }));
+      if (onPlansUpdated) onPlansUpdated();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
     } finally {
@@ -295,32 +320,53 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setActionLoadingId('add_new_plan');
     const token = localStorage.getItem('bot_auth_token');
     try {
+      const priceUsdNum = parseFloat(String(newPlanData.priceUsd)) || 0;
+      const priceBdtNum = parseFloat(String(newPlanData.priceBdt)) || Math.round(priceUsdNum * 120);
+      const durationNum = parseInt(String(newPlanData.durationDays), 10) || 30;
+      const maxBotsNum = parseInt(String(newPlanData.maxBots), 10) || 1;
+      const cleanId = (
+        newPlanData.id.trim() ||
+        newPlanData.nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '') ||
+        `plan_${Date.now()}`
+      ).trim();
+
+      const payload = {
+        ...newPlanData,
+        id: cleanId,
+        priceUsd: priceUsdNum,
+        priceBdt: priceBdtNum,
+        durationDays: durationNum,
+        maxBots: maxBotsNum
+      };
+
       const res = await fetch('/api/admin/plans/add', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(newPlanData)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'প্যাকেজ যোগ করতে ব্যর্থ');
       
-      setNotification({ type: 'success', message: '🎉 নতুন হোস্টিং প্যাকেজ সফলভাবে যোগ করা হয়েছে!' });
+      setNotification({ type: 'success', message: '🎉 নতুন হোস্টিং প্যাকেজ সফলভাবে যোগ ও সাইটে আপডেট হয়েছে!' });
       setShowAddPlanForm(false);
       setNewPlanData({
         id: '',
         nameBn: '',
         nameEn: '',
-        durationDays: 30,
-        maxBots: 3,
-        priceBdt: 200,
-        priceUsd: 2.0,
+        durationDays: '30',
+        maxBots: '3',
+        priceBdt: '240',
+        priceUsd: '2.0',
         popular: false,
         featuresBn: '২৪/৭ সার্বক্ষণিক লাইভ বট\nস্বয়ংক্রিয় ক্র্যাশ রিস্টার্ট\nলাইভ কনসোল ও লগস',
         featuresEn: '24/7 Priority Bot Uptime\nAuto Crash Recovery\nLive Console & Logs'
       });
       loadAllAdminData();
+      window.dispatchEvent(new CustomEvent('plans-updated', { detail: data.plans || data.plan }));
+      if (onPlansUpdated) onPlansUpdated();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
     } finally {
@@ -344,8 +390,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'ডিলিট করতে ব্যর্থ');
-      setNotification({ type: 'success', message: 'প্যাকেজ ডিলিট করা হয়েছে।' });
+      setNotification({ type: 'success', message: 'প্যাকেজ ডিলিট করা হয়েছে এবং সাইট থেকে মুছে দেওয়া হয়েছে।' });
       loadAllAdminData();
+      window.dispatchEvent(new CustomEvent('plans-updated', { detail: data.plans }));
+      if (onPlansUpdated) onPlansUpdated();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
     } finally {
@@ -546,6 +594,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 { id: 'payments' as AdminTabType, labelBn: 'পেমেন্ট নাম্বার', labelEn: 'Payment Numbers', icon: CreditCard, iconColor: 'text-purple-400' },
                 { id: 'bots' as AdminTabType, labelBn: 'সকল বট নিয়ন্ত্রণ', labelEn: 'All Bots Control', icon: Bot, iconColor: 'text-blue-400' },
                 { id: 'smtp' as AdminTabType, labelBn: 'SMTP সেটিংস', labelEn: 'SMTP Email', icon: Mail, iconColor: 'text-orange-400' },
+                { id: 'site' as AdminTabType, labelBn: 'সাইট লোগো ও নাম', labelEn: 'Site Logo & Branding', icon: Sliders, iconColor: 'text-amber-400' },
               ].map((tab) => {
                 const IconComp = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -836,18 +885,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">প্যাকেজ আইডি (Unique ID):</label>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      প্যাকেজ আইডি (Unique ID - ঐচ্ছিক):
+                    </label>
                     <input
                       type="text"
                       value={newPlanData.id}
                       onChange={(e) => setNewPlanData({ ...newPlanData, id: e.target.value })}
-                      placeholder="e.g. 2_months_special"
+                      placeholder="e.g. 2_months_special (খালি রাখলে স্বয়ংক্রিয় হবে)"
                       className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
-                      required
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">নাম (বাংলা):</label>
+                    <label className="block font-bold text-slate-300 mb-1">নাম (বাংলা) *:</label>
                     <input
                       type="text"
                       value={newPlanData.nameBn}
@@ -858,7 +908,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">নাম (English):</label>
+                    <label className="block font-bold text-slate-300 mb-1">নাম (English) *:</label>
                     <input
                       type="text"
                       value={newPlanData.nameEn}
@@ -872,39 +922,51 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="block font-bold text-emerald-400 mb-1">মূল্য ($ USDT):</label>
+                    <label className="block font-bold text-emerald-400 mb-1">মূল্য ($ USDT) *:</label>
                     <input
                       type="number"
+                      step="any"
                       min="0"
-                      step="0.1"
                       value={newPlanData.priceUsd}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => {
-                        const p = parseFloat(e.target.value) || 0;
-                        setNewPlanData({ ...newPlanData, priceUsd: p, priceBdt: Math.round(p * 120) });
+                        const val = e.target.value;
+                        setNewPlanData({
+                          ...newPlanData,
+                          priceUsd: val,
+                          priceBdt: val === '' ? '' : Math.round((parseFloat(val) || 0) * 120)
+                        });
                       }}
                       className="w-full bg-[#0d1627] border border-emerald-500/40 rounded-xl p-2 text-xs text-white font-bold"
+                      placeholder="0.00"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">মেয়াদ (দিন):</label>
+                    <label className="block font-bold text-slate-300 mb-1">মেয়াদ (দিন) *:</label>
                     <input
                       type="number"
                       min="1"
+                      step="1"
                       value={newPlanData.durationDays}
-                      onChange={(e) => setNewPlanData({ ...newPlanData, durationDays: parseInt(e.target.value, 10) || 30 })}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, durationDays: e.target.value })}
                       className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      placeholder="30"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">বট সীমা (Max Bots):</label>
+                    <label className="block font-bold text-slate-300 mb-1">বট সীমা (Max Bots) *:</label>
                     <input
                       type="number"
                       min="1"
+                      step="1"
                       value={newPlanData.maxBots}
-                      onChange={(e) => setNewPlanData({ ...newPlanData, maxBots: parseInt(e.target.value, 10) || 1 })}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setNewPlanData({ ...newPlanData, maxBots: e.target.value })}
                       className="w-full bg-[#0d1627] border border-[#1f2d48] rounded-xl p-2 text-xs text-white"
+                      placeholder="1"
                       required
                     />
                   </div>
@@ -985,14 +1047,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <input
                           type="number"
                           min="0"
-                          step="0.5"
-                          value={p.priceUsd}
+                          step="any"
+                          value={p.priceUsd ?? ''}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
+                            const val = e.target.value;
                             const updated = [...plans];
-                            updated[idx] = { ...updated[idx], priceUsd: val, priceBdt: Math.round(val * 120) };
+                            updated[idx] = {
+                              ...updated[idx],
+                              priceUsd: val as any,
+                              priceBdt: val === '' ? ('' as any) : Math.round((parseFloat(val) || 0) * 120)
+                            };
                             setPlans(updated);
                           }}
+                          placeholder="0.00"
                           className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-emerald-400 rounded-xl p-2 text-xs text-white font-bold"
                         />
                       </div>
@@ -1004,12 +1072,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <input
                           type="number"
                           min="1"
-                          value={p.maxBots}
+                          step="1"
+                          value={p.maxBots ?? ''}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
+                            const val = e.target.value;
                             const updated = [...plans];
-                            updated[idx] = { ...updated[idx], maxBots: parseInt(e.target.value, 10) || 1 };
+                            updated[idx] = { ...updated[idx], maxBots: val as any };
                             setPlans(updated);
                           }}
+                          placeholder="1"
                           className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl p-2 text-xs text-white"
                         />
                       </div>
@@ -1021,12 +1093,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <input
                           type="number"
                           min="1"
-                          value={p.durationDays}
+                          step="1"
+                          value={p.durationDays ?? ''}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
+                            const val = e.target.value;
                             const updated = [...plans];
-                            updated[idx] = { ...updated[idx], durationDays: parseInt(e.target.value, 10) || 1 };
+                            updated[idx] = { ...updated[idx], durationDays: val as any };
                             setPlans(updated);
                           }}
+                          placeholder="30"
                           className="w-full bg-[#090e18] border border-[#1f2d48] focus:border-[#0088cc] rounded-xl p-2 text-xs text-white"
                         />
                       </div>
@@ -1247,6 +1323,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         {/* SMTP Email Settings Tab */}
         {activeTab === 'smtp' && <AdminSmtpManager lang={lang} />}
+
+        {/* Site Logo & Branding Tab */}
+        {activeTab === 'site' && <AdminSiteSettingsManager />}
 
         </div>
 

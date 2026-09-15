@@ -19,7 +19,7 @@ import { TokenCheckModal } from './components/TokenCheckModal';
 import { SafeUploadModal } from './components/SafeUploadModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { NotificationsModal } from './components/NotificationsModal';
-import { HostedBot, LogEntry, AuthUser } from './types';
+import { HostedBot, LogEntry, AuthUser, SiteSettings } from './types';
 import { playBotStoppedAlert } from './utils/audioAlert';
 
 export default function App() {
@@ -31,6 +31,23 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({
+    siteName: 'FAKIR BD TOP UP',
+    logoUrl: '/site-logo.png',
+    taglineBn: '২৪/৭ ক্লাউড বট ও টপ আপ সার্ভিস',
+    taglineEn: '24/7 Cloud Bot & Top Up Service'
+  });
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.settings) {
+          setSiteSettings(data.settings);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [lang, setLang] = useState<'bn' | 'en'>(() => {
     const saved = localStorage.getItem('bot_lang');
@@ -498,6 +515,7 @@ export default function App() {
         hasActivePlan={hasActivePlan}
         botsCount={bots.length}
         pendingCount={pendingRequestsCount}
+        siteSettings={siteSettings}
       />
 
       {/* Slide-out Navigation Drawer */}
@@ -524,6 +542,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onToggleLang={() => setLang((prev) => (prev === 'bn' ? 'en' : 'bn'))}
+        siteSettings={siteSettings}
       />
 
       {/* Main Page Content - Generous bottom padding on mobile so bottom bar never obscures content */}
@@ -557,6 +576,7 @@ export default function App() {
             hasActivePlan={hasActivePlan}
             lang={lang}
             botsCount={bots.length}
+            siteSettings={siteSettings}
           />
         )}
 
@@ -597,12 +617,15 @@ export default function App() {
           />
         )}
 
-        {/* 5. Support Center Page */}
+        {/* 5. Support Center Page with Accordion FAQ */}
         {activeTab === 'support' && (
           <SupportCenterPage
             user={currentUser}
             onBack={() => setActiveTab('home')}
             onOpenAuthModal={() => setShowAuthModal(true)}
+            lang={lang}
+            onNavigateToDeploy={handleDeployNewBot}
+            onNavigateToPlans={() => setActiveTab('plans')}
           />
         )}
 
@@ -636,6 +659,8 @@ export default function App() {
               );
             }}
             lang={lang}
+            onNavigateToDeploy={handleDeployNewBot}
+            onNavigateToSupport={() => setActiveTab('support')}
           />
         )}
 
@@ -710,10 +735,11 @@ export default function App() {
         onSuccess={(user) => {
           setCurrentUser(user);
           setShowAuthModal(false);
+          setActiveTab('home');
           setToastMessage(
             lang === 'bn'
-              ? `স্বাগতম, ${user.name}! আপনি সফলভাবে লগইন হয়েছেন।`
-              : `Welcome, ${user.name}! You are logged in.`
+              ? `🎉 স্বাগতম, ${user.name}! গুগল ও অ্যাকাউন্টে সফলভাবে লগইন হয়েছেন।`
+              : `🎉 Welcome, ${user.name}! Successfully signed in.`
           );
         }}
         lang={lang}
@@ -799,6 +825,9 @@ export default function App() {
           currentUser={currentUser}
           lang={lang}
           onBotAction={() => fetchBots()}
+          onPlansUpdated={() => {
+            window.dispatchEvent(new CustomEvent('plans-updated'));
+          }}
         />
       )}
 

@@ -534,9 +534,10 @@ export function StoreWalletPage({
                   <input
                     type="number"
                     step="any"
-                    min="0.5"
+                    min="0.1"
                     required
                     value={depositAmount}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setDepositAmount(e.target.value)}
                     placeholder="e.g. 5"
                     className="w-full px-4 py-2.5 rounded-xl bg-[#0f172a] border border-[#1e293b] text-sm text-white font-bold focus:border-[#00d293] focus:outline-hidden pr-20"

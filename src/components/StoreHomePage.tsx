@@ -20,7 +20,7 @@ import {
   ExternalLink,
   Code2
 } from 'lucide-react';
-import { StoreBanner, AuthUser } from '../types';
+import { StoreBanner, AuthUser, SiteSettings } from '../types';
 
 interface AnnouncementItem {
   id: string;
@@ -43,6 +43,7 @@ interface StoreHomePageProps {
   hasActivePlan: boolean;
   lang: 'bn' | 'en';
   botsCount?: number;
+  siteSettings?: SiteSettings;
 }
 
 export function StoreHomePage({
@@ -56,7 +57,8 @@ export function StoreHomePage({
   onOpenAdminModal,
   hasActivePlan,
   lang,
-  botsCount = 0
+  botsCount = 0,
+  siteSettings
 }: StoreHomePageProps) {
   const isAdmin = Boolean(user && (user.role === 'admin' || user.email === 'toyoburrahman9090@gmail.com'));
   const [banners, setBanners] = useState<StoreBanner[]>([]);
@@ -111,6 +113,44 @@ export function StoreHomePage({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Brand Hero Card with Official Logo */}
+      <div className="relative rounded-3xl overflow-hidden border border-amber-500/30 bg-gradient-to-br from-slate-950 via-[#0e1628] to-slate-900 shadow-xl p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 sm:gap-5 w-full sm:w-auto">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-black/70 border-2 border-amber-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10 p-1">
+            <img
+              src={siteSettings?.logoUrl || '/logo-icon.png'}
+              alt={siteSettings?.siteName || 'Logo'}
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">
+                {siteSettings?.siteName || 'FAKIR BD TOP UP'}
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 text-[10px] sm:text-xs font-black uppercase shadow-xs">
+                Official
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1">
+              {lang === 'bn'
+                ? (siteSettings?.taglineBn || '২৪/৭ ক্লাউড টেলিগ্রাম বট ও টপ আপ সেবা')
+                : (siteSettings?.taglineEn || '24/7 Cloud Bot Hosting & Fast Top Up Service')}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            onClick={onDeployNewBot}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md transition-all cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{lang === 'bn' ? 'বট ডিপ্লয় করুন' : 'Deploy Bot'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* 1. Live Announcement Notice Ticker */}
       {announcements.length > 0 && (
         <div className="bg-gradient-to-r from-emerald-500/10 via-[#00d293]/10 to-teal-500/10 border border-[#00d293]/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-slate-800 dark:text-slate-200">
